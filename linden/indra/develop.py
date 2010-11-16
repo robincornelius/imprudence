@@ -568,7 +568,7 @@ class WindowsSetup(PlatformSetup):
 
             reg = _winreg.ConnectRegistry(None, _winreg.HKEY_LOCAL_MACHINE)
             key = _winreg.OpenKey(reg, key_str)
-            value = _winreg.QueryValueEx(key, value_str)[0]+"IDE"
+            value = _winreg.QueryValueEx(key, value_str)[0]+"vcpackages"
             print 'Found: %s' % value
             return value
         except WindowsError, err:
@@ -589,13 +589,9 @@ class WindowsSetup(PlatformSetup):
             if environment == '':
                  print >> sys.stderr, "Something went very wrong during build stage, could not find a Visual Studio?"
             else:
-                 print >> sys.stderr, "\nSolution generation complete, as you are using an express edition the final\n stages will need to be completed by hand"
                  build_dirs=self.build_dirs();
-                 print >> sys.stderr, "Solution can now be found in:", build_dirs[0]
-                 print >> sys.stderr, "Set %s as startup project" % self.project_name
-                 print >> sys.stderr, "Set build target is Release or RelWithDbgInfo"
-                 exit(0)   
-
+                 return("\"\"%s\\vcbuild\" /useenv %s.sln \"%s|win32\"\"" % (environment,self.project_name,self.build_type))
+  
         # devenv.com is CLI friendly, devenv.exe... not so much.
         return ('"%sdevenv.com" %s.sln /build %s' % 
                (environment, self.project_name, self.build_type))
@@ -618,7 +614,12 @@ class WindowsSetup(PlatformSetup):
         '''Override to add the vstool.exe call after running cmake.'''
         PlatformSetup.run_cmake(self, args)
         if self.unattended == 'OFF':
-            self.run_vstool()
+            try:
+                self.run_vstool()
+            except:
+                # if we start develop.py with a fixed -G option it does not autodetect express
+                # all we can do is bail here and continue, without a massive rewrite of the entire logic
+                print("Running vstool failed, this is normal for express editions of visual studio")
 
     def run_vstool(self):
         for build_dir in self.build_dirs():
