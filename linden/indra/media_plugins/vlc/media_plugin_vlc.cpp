@@ -74,7 +74,6 @@ static void *lock(void *data, void **p_pixels)
 static void unlock(void *data, void *id, void *const *p_pixels)
 {
 	MediaPluginVLC * ppthis = (MediaPluginVLC *)data;
-
 }
 
 static void display(void *data, void *id)
@@ -255,8 +254,8 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 
 			    if(mp)
 				{
-					libvlc_video_set_format(mp, "RGBA", mTextureWidth, mTextureHeight, mTextureWidth*4);
 					libvlc_video_set_callbacks(mp, lock, unlock, display, this);
+					libvlc_video_set_format(mp, "RGBA", mTextureWidth, mTextureHeight, mTextureWidth*4);
 				}
 
 				LLPluginMessage message( LLPLUGIN_MESSAGE_CLASS_MEDIA, "size_change_response" );
@@ -282,6 +281,10 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 				     
 					 /* No need to keep the media now */
 					 libvlc_media_release (m);
+
+					 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
+					 libvlc_video_set_format(mp, "RGBA", mTextureWidth, mTextureHeight, mTextureWidth*4);
+					 
 			    }
 			}
 			else
