@@ -281,10 +281,6 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 				     
 					 /* No need to keep the media now */
 					 libvlc_media_release (m);
-
-					 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
-					 libvlc_video_set_format(mp, "RGBA", mTextureWidth, mTextureHeight, mTextureWidth*4);
-					 
 			    }
 			}
 			else
@@ -344,6 +340,18 @@ void MediaPluginVLC::update( F64 milliseconds )
 		switch(mMediaState)
 		{
 			case libvlc_Playing:
+				if(mStatus!=STATUS_PLAYING)
+				{
+					unsigned int w,h;
+					libvlc_video_get_size(mp,1,&w,&h);
+
+					LLPluginMessage message(LLPLUGIN_MESSAGE_CLASS_MEDIA, "size_change_request");
+					message.setValue("name", mTextureSegmentName);
+					message.setValueS32("width", w);
+					message.setValueS32("height", h);
+					sendMessage(message);
+				}
+				
 				setStatus(STATUS_PLAYING);
 				break;
 			case libvlc_Opening:
