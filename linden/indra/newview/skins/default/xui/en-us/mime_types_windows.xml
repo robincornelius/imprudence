@@ -109,7 +109,7 @@
 			movie
 		</widgettype>
 		<impl>
-			media_plugin_quicktime
+			media_plugin_vlc
 		</impl>
 	</scheme>
 	<mimetype name="blank">
@@ -142,7 +142,7 @@
 			audio
 		</widgettype>
 		<impl>
-			media_plugin_quicktime
+			media_plugin_vlc
 		</impl>
 	</mimetype>
 	<mimetype name="video/*">
@@ -197,7 +197,7 @@
 			audio
 		</widgettype>
 		<impl>
-			media_plugin_quicktime
+			media_plugin_vlc
 		</impl>
 	</mimetype>
 	<mimetype name="application/pdf">
@@ -274,7 +274,7 @@
 			audio
 		</widgettype>
 		<impl>
-			media_plugin_quicktime
+			media_plugin_vlc
 		</impl>
 	</mimetype>
 	<mimetype name="audio/mpeg">
@@ -285,7 +285,7 @@
 			audio
 		</widgettype>
 		<impl>
-			media_plugin_quicktime
+			media_plugin_vlc
 		</impl>
 	</mimetype>
 	<mimetype name="audio/x-aiff">
@@ -296,7 +296,7 @@
 			audio
 		</widgettype>
 		<impl>
-			media_plugin_quicktime
+			media_plugin_vlc
 		</impl>
 	</mimetype>
 	<mimetype name="audio/x-wav">
@@ -307,7 +307,7 @@
 			audio
 		</widgettype>
 		<impl>
-			media_plugin_quicktime
+			media_plugin_vlc
 		</impl>
 	</mimetype>
 	<mimetype menu="1" name="image/bmp">

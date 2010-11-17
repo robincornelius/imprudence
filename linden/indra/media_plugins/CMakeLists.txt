@@ -12,4 +12,6 @@ if (WINDOWS)
     add_subdirectory(quicktime)
 endif (WINDOWS)
 
+add_subdirectory(vlc)
+
 add_subdirectory(example)
