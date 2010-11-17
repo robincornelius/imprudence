@@ -1,11 +1,7 @@
 /**
- * @file media_plugin_example.cpp
- * @brief Example plugin for LLMedia API plugin system
- *
- * @cond
- * $LicenseInfo:firstyear=2008&license=viewergpl$
  * 
  * Copyright (c) 2008-2010, Linden Research, Inc.
+ * Copyright (c) 2010, Robin Cornelius <robin.cornelius@gmail.com>
  * 
  * Second Life Viewer Source Code
  * The source code in this file ("Source Code") is provided by Linden Lab
@@ -42,17 +38,8 @@
 #include "llpluginmessage.h"
 #include "llpluginmessageclasses.h"
 #include "media_plugin_base.h"
-#include "indra_constants.h" // for indra keyboard cod
-#include <curl/curl.h>
-#include "llsdserialize.h"
-#include <time.h>
-
-#include "indra_constants.h"
-
-#define XK_MISCELLANY 1
 
 #include <vlc/vlc.h>
-
 #include "media_plugin_vlc.h"
 
 #pragma warning( disable :  4189 )
@@ -137,6 +124,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 				
 				std::string plugin_version = "VLC plugin, Version 1.0.0.0";
 
+				setStatus(STATUS_NONE);
 				inst = libvlc_new (0, NULL);
 
 				//this can and will fail if it can't find its plugins, default search
@@ -251,7 +239,8 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 						}
 					};
 				};
-
+			
+				//crashy video code
 			    if(mp)
 				{
 					libvlc_video_set_callbacks(mp, lock, unlock, display, this);
@@ -280,6 +269,8 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 				     
 					 /* No need to keep the media now */
 					 libvlc_media_release (m);
+
+					 setStatus(STATUS_LOADING);
 			    }
 			}
 			else
@@ -318,7 +309,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 			else if(message_name == "set_volume")
 			{
 				F64 volume = message_in.getValueReal("volume");
-				libvlc_audio_set_volume(mp,volume);
+				libvlc_audio_set_volume(mp,volume*200);
 			}
 		}
 		else
@@ -332,6 +323,10 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 //
 void MediaPluginVLC::update( F64 milliseconds )
 {
+
+	if(STATUS_NONE == mStatus)
+		return;
+
 	if(mp)
 	{
 		mMediaState = libvlc_media_player_get_state(mp);
@@ -340,13 +335,14 @@ void MediaPluginVLC::update( F64 milliseconds )
 		{
 			case libvlc_Playing:
 				if(mStatus!=STATUS_PLAYING)
-				{
-					unsigned int w,h;
-					libvlc_video_get_size(mp,1,&w,&h);
-					size_change_request(w,h,32);
+				{			 
+					if(libvlc_media_player_has_vout(mp))
+					{
+						size_change_request(800,600,32);
+					}
+					setStatus(STATUS_PLAYING);
 				}
 				
-				setStatus(STATUS_PLAYING);
 				break;
 			case libvlc_Opening:
 			case libvlc_Buffering:
