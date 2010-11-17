@@ -236,16 +236,17 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 						{
 							std::cerr << "size change complete\n";
 							init();
+							//crashy video code
+							if(mp)
+							{
+								libvlc_video_set_callbacks(mp, lock, unlock, display, this);
+								libvlc_video_set_format(mp, "RGBA", mTextureWidth, mTextureHeight, mTextureWidth*4);
+							}
 						}
 					};
 				};
 			
-				//crashy video code
-			    if(mp)
-				{
-					libvlc_video_set_callbacks(mp, lock, unlock, display, this);
-					libvlc_video_set_format(mp, "RGBA", mTextureWidth, mTextureHeight, mTextureWidth*4);
-				}
+				
 
 				LLPluginMessage message( LLPLUGIN_MESSAGE_CLASS_MEDIA, "size_change_response" );
 				message.setValue( "name", name );
@@ -336,10 +337,7 @@ void MediaPluginVLC::update( F64 milliseconds )
 			case libvlc_Playing:
 				if(mStatus!=STATUS_PLAYING)
 				{			 
-					if(libvlc_media_player_has_vout(mp))
-					{
-						size_change_request(800,600,32);
-					}
+					size_change_request(libvlc_video_get_width(mp),libvlc_video_get_height(mp),32);
 					setStatus(STATUS_PLAYING);
 				}
 				
