@@ -269,7 +269,6 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 			else
 			if ( message_name == "load_uri" )
 			{
-
 				std::string uri = message_in.getValue( "uri" );
 				if ( ! uri.empty() )
 				{					
@@ -344,12 +343,7 @@ void MediaPluginVLC::update( F64 milliseconds )
 				{
 					unsigned int w,h;
 					libvlc_video_get_size(mp,1,&w,&h);
-
-					LLPluginMessage message(LLPLUGIN_MESSAGE_CLASS_MEDIA, "size_change_request");
-					message.setValue("name", mTextureSegmentName);
-					message.setValueS32("width", w);
-					message.setValueS32("height", h);
-					sendMessage(message);
+					size_change_request(w,h,32);
 				}
 				
 				setStatus(STATUS_PLAYING);
