@@ -64,12 +64,30 @@ MediaPluginVLC * MediaPluginVLC::sInstance;
 
 ////////////////////////////////////////////////////////////////////////////////
 //
+static void *lock(void *data, void **p_pixels)
+{
+	MediaPluginVLC * ppthis = (MediaPluginVLC *)data;
+	*p_pixels = ppthis->mRenderBuffer;
+	return NULL;
+}
+
+static void unlock(void *data, void *id, void *const *p_pixels)
+{
+	MediaPluginVLC * ppthis = (MediaPluginVLC *)data;
+
+}
+
+static void display(void *data, void *id)
+{
+	MediaPluginVLC * ppthis = (MediaPluginVLC *)data;
+
+}
+
+
 MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_func, void *host_user_data ) :
 	MediaPluginBase( host_send_func, host_user_data )
 {
 	mFirstTime = true;
-	mMouseButtonDown = false;
-	mStopAction = false;
 	mLastUpdateTime = 0;
 	sInstance=this;
 	mWidth=1;
@@ -83,39 +101,6 @@ MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_
 MediaPluginVLC::~MediaPluginVLC()
 {
 }
-
-////////////////////////////////////////////////////////////////////////////////
-//
-
-// This is not currently used for any actual purpose
-// the real VLC core does not accept modifiers and instead
-// sends the mod keys as individual key presses and the host mods them up
-EKeyboardModifier MediaPluginVLC::decodeModifiers(std::string &modifiers)
-{
-	int result = 0;
-	
-	if(modifiers.find("shift") != std::string::npos)
-		result |=KM_MODIFIER_SHIFT;
-	
-	if(modifiers.find("alt") != std::string::npos)
-		result |= KM_MODIFIER_ALT;
-	
-	if(modifiers.find("control") != std::string::npos)
-		result |= KM_MODIFIER_CONTROL;
-		
-	if(modifiers.find("meta") != std::string::npos)
-		result |= KM_MODIFIER_META;
-		
-	return (EKeyboardModifier)result;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-void MediaPluginVLC::keyEvent(EKeyEvent key_event, int key, EKeyboardModifier modifiers, LLSD native_key_data)
-	{
-
-		
-	};
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -201,7 +186,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 					{
 						// This is the currently active pixel buffer.
 						// Make sure we stop drawing to it.
-						mPixels = NULL;
+						mRenderBuffer = mPixels = NULL;
 						mTextureSegmentName.clear();
 					};
 					mSharedSegments.erase( iter );
@@ -253,7 +238,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 					SharedSegmentMap::iterator iter = mSharedSegments.find( name );
 					if ( iter != mSharedSegments.end() )
 					{
-						mPixels = ( unsigned char* )iter->second.mAddress;
+						mRenderBuffer = mPixels = ( unsigned char* )iter->second.mAddress;
 						mWidth = width;
 						mHeight = height;
 
@@ -267,6 +252,12 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 						}
 					};
 				};
+
+			    if(mp)
+				{
+					libvlc_video_set_format(mp, "RGBA", mTextureWidth, mTextureHeight, mTextureWidth*4);
+					libvlc_video_set_callbacks(mp, lock, unlock, display, this);
+				}
 
 				LLPluginMessage message( LLPLUGIN_MESSAGE_CLASS_MEDIA, "size_change_response" );
 				message.setValue( "name", name );
@@ -291,7 +282,6 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 				     
 					 /* No need to keep the media now */
 					 libvlc_media_release (m);
-				
 			    }
 			}
 			else
@@ -312,11 +302,11 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 			}
 			else if(message_name == "start")
 			{
-				 libvlc_media_player_play(mp);	
+				 libvlc_media_player_play(mp);
 			}
 			else if(message_name == "pause")
 			{
-				libvlc_media_player_pause (mp);
+				libvlc_media_player_pause (mp);	
 			}
 			else if(message_name == "seek")
 			{
@@ -344,8 +334,34 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 //
 void MediaPluginVLC::update( F64 milliseconds )
 {
-	if ( mStopAction )
-		return;
+	if(mp)
+	{
+		mMediaState = libvlc_media_player_get_state(mp);
+
+		switch(mMediaState)
+		{
+			case libvlc_Playing:
+				setStatus(STATUS_PLAYING);
+				break;
+			case libvlc_Opening:
+			case libvlc_Buffering:
+				setStatus(STATUS_LOADING);
+				break;
+			case libvlc_Paused:
+				setStatus(STATUS_PAUSED);
+				break;
+			case libvlc_Stopped:
+			case libvlc_Ended:
+				setStatus(STATUS_DONE);
+				break;
+			case libvlc_Error:
+				setStatus(STATUS_ERROR);
+				break;
+			default:
+				break;
+
+		}
+	}
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -355,12 +371,9 @@ bool MediaPluginVLC::init()
 	LLPluginMessage message( LLPLUGIN_MESSAGE_CLASS_MEDIA, "name_text" );
 	message.setValue( "name", "VLC Plugin" );
 	sendMessage( message );
-	mStopAction=false;
 
 	return true;
 };
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -30,6 +30,8 @@ class MediaPluginVLC : public MediaPluginBase
 		void size_change_request(int w,int h,int d);
 	
 		void setDirty2() { setDirty(0,0,mWidth,mHeight);};
+
+		unsigned char * mRenderBuffer;
 		
 	private:
 		static MediaPluginVLC * sInstance;
@@ -37,8 +39,6 @@ class MediaPluginVLC : public MediaPluginBase
 		void update( F64 milliseconds );
 
 		bool mFirstTime;
-		void keyEvent(EKeyEvent key_event, int key, EKeyboardModifier modifiers, LLSD native_key_data = LLSD::emptyMap());
-		EKeyboardModifier decodeModifiers(std::string &modifiers);
 
 		time_t mLastUpdateTime;
 		enum Constants { ENumObjects = 10 };
@@ -53,12 +53,10 @@ class MediaPluginVLC : public MediaPluginBase
 		int mYInc[ ENumObjects ];
 		int mBlockSize[ ENumObjects ];
 
-		bool mMouseButtonDown;
-		bool mStopAction;
-
 		libvlc_instance_t * inst;
 		libvlc_media_player_t *mp;
 		libvlc_media_t *m;
+		libvlc_state_t mMediaState;
 };
 
 #endif
