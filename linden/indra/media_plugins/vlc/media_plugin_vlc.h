@@ -27,11 +27,11 @@ class MediaPluginVLC : public MediaPluginBase
 
 		/*virtual*/ void receiveMessage( const char* message_string );
 
-		void size_change_request(int w,int h,int d);
-	
-		void setDirty2() { setDirty(0,0,mWidth,mHeight);};
+		void size_change_request(int w,int h);
 
 		unsigned char * mRenderBuffer;
+		unsigned char * mDummyRenderBuffer;
+
 		
 	private:
 		static MediaPluginVLC * sInstance;
@@ -54,9 +54,20 @@ class MediaPluginVLC : public MediaPluginBase
 		int mBlockSize[ ENumObjects ];
 
 		libvlc_instance_t * inst;
-		libvlc_media_player_t *mp;
+		
 		libvlc_media_t *m;
 		libvlc_state_t mMediaState;
+		libvlc_event_manager_t *em;
+
+public:
+		libvlc_media_player_t *mp;
+		bool mSizeInit;
+		bool mSizeChangeRequestSent;
+		
+	    void Invalidate();
+
+		static void MediaPluginVLC::status_callback(const libvlc_event_t *ev, void *data);
+
 };
 
 #endif

@@ -54,7 +54,32 @@ MediaPluginVLC * MediaPluginVLC::sInstance;
 static void *lock(void *data, void **p_pixels)
 {
 	MediaPluginVLC * ppthis = (MediaPluginVLC *)data;
-	*p_pixels = ppthis->mRenderBuffer;
+
+	if(ppthis->mSizeInit==false)
+	{
+		unsigned int px=0,py=0;
+		libvlc_video_get_size(ppthis->mp,0,&px,&py);
+		if(!ppthis->mSizeChangeRequestSent && px>0 && py>0)
+		{
+			ppthis->size_change_request(px,py);
+			ppthis->mSizeChangeRequestSent = true;
+		}	
+
+		if(ppthis->mDummyRenderBuffer==NULL)
+		{
+			if(px==0)
+				px=1024;
+			if(px==0)
+				py=1024;
+			ppthis->mDummyRenderBuffer = (unsigned char *)malloc(px*py*4); // meh
+		}
+		*p_pixels = ppthis->mDummyRenderBuffer;
+	}
+	else
+	{
+		*p_pixels = ppthis->mRenderBuffer;
+	}
+
 	return NULL;
 }
 
@@ -66,9 +91,39 @@ static void unlock(void *data, void *id, void *const *p_pixels)
 static void display(void *data, void *id)
 {
 	MediaPluginVLC * ppthis = (MediaPluginVLC *)data;
-
+	ppthis->Invalidate();
 }
 
+//static
+void MediaPluginVLC::status_callback(const libvlc_event_t *ev, void *data)
+{
+	MediaPluginVLC * pthis = (MediaPluginVLC *)data;
+
+	switch(ev->type)
+	{
+		case libvlc_MediaPlayerPlaying:
+			pthis->setStatus(STATUS_PLAYING);	
+		break;
+
+		case libvlc_MediaPlayerPaused:
+			pthis->setStatus(STATUS_PAUSED);	
+		break;
+
+		case libvlc_MediaPlayerStopped:
+		case libvlc_MediaPlayerEndReached:
+			pthis->setStatus(STATUS_DONE);
+		break;
+
+		case libvlc_MediaPlayerOpening:
+		case libvlc_MediaPlayerBuffering:
+			pthis->setStatus(STATUS_LOADING);
+		break;
+
+		case libvlc_MediaPlayerEncounteredError:
+			pthis->setStatus(STATUS_ERROR);
+		break;
+	}				
+}
 
 MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_func, void *host_user_data ) :
 	MediaPluginBase( host_send_func, host_user_data )
@@ -79,6 +134,7 @@ MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_
 	mWidth=1;
 	mHeight=1;
 	mDepth=4;
+	mSizeInit=false;
 	
 }
 
@@ -86,11 +142,21 @@ MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_
 //
 MediaPluginVLC::~MediaPluginVLC()
 {
+	if(mp)
+	{
+		libvlc_media_player_stop (mp);
+		libvlc_media_player_release (mp);
+	}
+ 
+	if(inst)
+	{
+		libvlc_release (inst);
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 //
-void  MediaPluginVLC::size_change_request(int w,int h,int d)
+void  MediaPluginVLC::size_change_request(int w,int h)
 {
 	LLPluginMessage message(LLPLUGIN_MESSAGE_CLASS_MEDIA, "size_change_request");
 	message.setValue("name", mTextureSegmentName);
@@ -135,7 +201,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 					//Abuse this message to indicate a fail
 					plugin_version = "VLC plugin, Version 1.0.0.0 - failed to start VLC core";
 				}
-
+		
 				message.setValue( "plugin_version", plugin_version );
 				sendMessage( message );
 			}
@@ -159,6 +225,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 				info.mAddress = message_in.getValuePointer( "address" );
 				info.mSize = ( size_t )message_in.getValueS32( "size" );
 				std::string name = message_in.getValue( "name" );
+				mTextureSegmentName = name;
 				mSharedSegments.insert( SharedSegmentMap::value_type( name, info ) );
 			}
 			else
@@ -236,18 +303,23 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 						{
 							std::cerr << "size change complete\n";
 							init();
-							//crashy video code
+							
+							// At this point set the video format and size,
 							if(mp)
 							{
-								libvlc_video_set_callbacks(mp, lock, unlock, display, this);
-								libvlc_video_set_format(mp, "RGBA", mTextureWidth, mTextureHeight, mTextureWidth*4);
+								libvlc_video_set_format(mp, "RGBA", texture_width, texture_height, texture_width*4);
+								if(mDummyRenderBuffer)
+								{
+									free(mDummyRenderBuffer);
+									mDummyRenderBuffer = 0;
+								}
+								mSizeInit=true;
 							}
 						}
 					};
 				};
 			
 				
-
 				LLPluginMessage message( LLPLUGIN_MESSAGE_CLASS_MEDIA, "size_change_response" );
 				message.setValue( "name", name );
 				message.setValueS32( "width", width );
@@ -262,6 +334,9 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 				std::string uri = message_in.getValue( "uri" );
 				if ( ! uri.empty() )
 				{					
+					 mSizeInit = false;
+					 mSizeChangeRequestSent = false;
+
 					 /* Create a new item */
 					 m = libvlc_media_new_path (inst, uri.c_str());
 				        
@@ -271,6 +346,18 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 					 /* No need to keep the media now */
 					 libvlc_media_release (m);
 
+					 //Listen to some events we might care about
+					 em = libvlc_media_player_event_manager(mp);
+					 libvlc_event_attach(em, libvlc_MediaPlayerPlaying, status_callback, this);
+					 libvlc_event_attach(em, libvlc_MediaPlayerPaused, status_callback, this);
+					 libvlc_event_attach(em, libvlc_MediaPlayerStopped, status_callback, this);
+					 libvlc_event_attach(em, libvlc_MediaPlayerOpening, status_callback, this);
+					 libvlc_event_attach(em, libvlc_MediaPlayerBuffering, status_callback, this);
+					 libvlc_event_attach(em, libvlc_MediaPlayerEndReached, status_callback, this);
+					 libvlc_event_attach(em, libvlc_MediaPlayerEncounteredError, status_callback, this);
+
+					 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
+					
 					 setStatus(STATUS_LOADING);
 			    }
 			}
@@ -325,42 +412,6 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 void MediaPluginVLC::update( F64 milliseconds )
 {
 
-	if(STATUS_NONE == mStatus)
-		return;
-
-	if(mp)
-	{
-		mMediaState = libvlc_media_player_get_state(mp);
-
-		switch(mMediaState)
-		{
-			case libvlc_Playing:
-				if(mStatus!=STATUS_PLAYING)
-				{			 
-					size_change_request(libvlc_video_get_width(mp),libvlc_video_get_height(mp),32);
-					setStatus(STATUS_PLAYING);
-				}
-				
-				break;
-			case libvlc_Opening:
-			case libvlc_Buffering:
-				setStatus(STATUS_LOADING);
-				break;
-			case libvlc_Paused:
-				setStatus(STATUS_PAUSED);
-				break;
-			case libvlc_Stopped:
-			case libvlc_Ended:
-				setStatus(STATUS_DONE);
-				break;
-			case libvlc_Error:
-				setStatus(STATUS_ERROR);
-				break;
-			default:
-				break;
-
-		}
-	}
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -389,6 +440,9 @@ int init_media_plugin( LLPluginInstance::sendMessageFunction host_send_func,
 	return 0;
 }
 
-
+void MediaPluginVLC::Invalidate()
+{
+	setDirty( 0, 0, mWidth, mHeight );
+}
 
 
