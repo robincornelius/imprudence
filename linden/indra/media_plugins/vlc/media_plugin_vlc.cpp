@@ -128,6 +128,7 @@ MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_
 	mHeight=1;
 	mDepth=4;
 	mSizeInit=false;
+	mCurrentVolume = 0.25;
 	
 }
 
@@ -348,6 +349,8 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 					 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
 					 mCurrentInitState = STATE_WAITFMT;
 
+					libvlc_audio_set_volume(mp,mCurrentVolume*200);
+
 					 setStatus(STATUS_LOADING);
 			    }
 			}
@@ -388,6 +391,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 			{
 				F64 volume = message_in.getValueReal("volume");
 				libvlc_audio_set_volume(mp,volume*200);
+				mCurrentVolume = volume;
 			}
 		}
 		else

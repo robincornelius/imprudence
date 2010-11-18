@@ -83,6 +83,8 @@ public:
 		int mNaturalWidth;
 		int mNaturalHeight;
 
+		double mCurrentVolume;
+
 };
 
 #endif
