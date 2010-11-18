@@ -30,7 +30,7 @@ class MediaPluginVLC : public MediaPluginBase
 		void size_change_request(int w,int h);
 
 		unsigned char * mRenderBuffer;
-		unsigned char * mDummyRenderBuffer;
+		unsigned char mDummyRenderBuffer[100]; // 10x10 initBuffer
 
 		
 	private:
@@ -67,6 +67,21 @@ public:
 	    void Invalidate();
 
 		static void MediaPluginVLC::status_callback(const libvlc_event_t *ev, void *data);
+
+		enum mPlaySetUpStates
+		{
+			STATE_WAITFMT,
+			STATE_GOTFMT,
+			STATE_WAITSTOP,
+			STATUS_WAITSIZECHANGE,
+			STATUS_SIZECHANGECOMPLETE,
+			STATUS_DANCEFINISHED
+		};
+
+		mPlaySetUpStates mCurrentInitState;
+
+		int mNaturalWidth;
+		int mNaturalHeight;
 
 };
 

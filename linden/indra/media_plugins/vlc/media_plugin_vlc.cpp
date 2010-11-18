@@ -55,24 +55,17 @@ static void *lock(void *data, void **p_pixels)
 {
 	MediaPluginVLC * ppthis = (MediaPluginVLC *)data;
 
-	if(ppthis->mSizeInit==false)
+	if(ppthis->mCurrentInitState==MediaPluginVLC::STATE_WAITFMT)
 	{
 		unsigned int px=0,py=0;
 		libvlc_video_get_size(ppthis->mp,0,&px,&py);
 		if(!ppthis->mSizeChangeRequestSent && px>0 && py>0)
 		{
-			ppthis->size_change_request(px,py);
-			ppthis->mSizeChangeRequestSent = true;
+			ppthis->mCurrentInitState = MediaPluginVLC::STATE_GOTFMT;
+			ppthis->mNaturalWidth = px;
+			ppthis->mNaturalHeight = py;
 		}	
 
-		if(ppthis->mDummyRenderBuffer==NULL)
-		{
-			if(px==0)
-				px=1024;
-			if(px==0)
-				py=1024;
-			ppthis->mDummyRenderBuffer = (unsigned char *)malloc(px*py*4); // meh
-		}
 		*p_pixels = ppthis->mDummyRenderBuffer;
 	}
 	else
@@ -299,21 +292,13 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 						mTextureWidth = texture_width;
 						mTextureHeight = texture_height;
 				
-						if(mHeight>1 && mWidth>1)
+						if(mHeight==mNaturalHeight && mWidth==mNaturalWidth)
 						{
 							std::cerr << "size change complete\n";
 							init();
-							
-							// At this point set the video format and size,
-							if(mp)
+							if(mCurrentInitState == STATUS_WAITSIZECHANGE)
 							{
-								libvlc_video_set_format(mp, "RGBA", texture_width, texture_height, texture_width*4);
-								if(mDummyRenderBuffer)
-								{
-									free(mDummyRenderBuffer);
-									mDummyRenderBuffer = 0;
-								}
-								mSizeInit=true;
+								mCurrentInitState = STATUS_SIZECHANGECOMPLETE;	
 							}
 						}
 					};
@@ -356,8 +341,10 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 					 libvlc_event_attach(em, libvlc_MediaPlayerEndReached, status_callback, this);
 					 libvlc_event_attach(em, libvlc_MediaPlayerEncounteredError, status_callback, this);
 
+					 libvlc_video_set_format(mp, "RGBA", 10, 10, 4*10); //size of init buffer
 					 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
-					
+					 mCurrentInitState = STATE_WAITFMT;
+
 					 setStatus(STATUS_LOADING);
 			    }
 			}
@@ -411,6 +398,51 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 //
 void MediaPluginVLC::update( F64 milliseconds )
 {
+
+	// Meh
+
+	//start playing
+	//wait for framesize to arrive
+	//stop playing
+	//restart media
+	//init frame size
+	//start playing for real
+
+	//States
+	// PLAY_START
+	// 
+
+	switch(mCurrentInitState)
+	{
+		case STATE_GOTFMT:
+			libvlc_media_player_stop (mp);
+			mCurrentInitState = STATE_WAITSTOP;
+			break;
+
+		case STATE_WAITSTOP:
+			if(this->mStatus==STATUS_DONE)
+			{
+				 libvlc_video_set_format(mp, "RGBA", mNaturalWidth, mNaturalHeight, 4*mNaturalWidth); //size of init buffer
+				 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
+				 if(mNaturalWidth==this->mTextureWidth && mNaturalHeight==this->mTextureHeight)
+				 {
+					mCurrentInitState = STATUS_SIZECHANGECOMPLETE;
+				 }
+				 else
+				 {
+					 size_change_request(mNaturalWidth, mNaturalHeight);
+					 mCurrentInitState = STATUS_WAITSIZECHANGE;
+				 }
+			}
+			break;
+		case STATUS_SIZECHANGECOMPLETE:
+			{
+				libvlc_media_player_play (mp);
+				mCurrentInitState= STATUS_DANCEFINISHED;
+			}
+	}
+
+
 
 };
 
