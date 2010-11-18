@@ -1004,9 +1004,9 @@ Portions copyright (C) 1997 - 2002, Makoto Matsumoto and Takuji Nishimura
           <key>windows</key>
           <map>
             <key>md5sum</key>
-            <string>c8ca6a3ccbdb253ba73e86d0f8ccd73a</string>
+            <string>337f51a4d61352c62aad18eb666ad7b6</string>
             <key>url</key>
-            <uri>http://www.byteme.org.uk/downloads/libvlc-windows-20101117.tar.bz2</uri>
+            <uri>http://www.byteme.org.uk/downloads/libvlc-windows-20101118.tar.bz2</uri>
           </map>
         </map>
       </map>
