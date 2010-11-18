@@ -184,7 +184,10 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 				std::string plugin_version = "VLC plugin, Version 1.0.0.0";
 
 				setStatus(STATUS_NONE);
-				inst = libvlc_new (0, NULL);
+
+				char * options[] = {"path","--transform-type=vflip","--vout-filter=transform",NULL};
+
+				inst = libvlc_new (3, options);
 
 				//this can and will fail if it can't find its plugins, default search
 				//is for plugins/
