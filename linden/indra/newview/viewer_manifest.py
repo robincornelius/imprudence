@@ -302,6 +302,20 @@ class WindowsManifest(ViewerManifest):
             self.path("qsvg4.dll")
             self.path("qtiff4.dll")
             self.end_prefix()
+            
+        # Media plugins - WebKit/Qt
+        if self.prefix(src='../media_plugins/vlc/%s' % self.args['configuration'], dst="llplugin"):
+            self.path("media_plugin_vlc.dll")
+            self.end_prefix()
+            
+        if self.prefix(src="../../libraries/i686-win32/lib/release/", dst="llplugin"):
+            self.path("libvlc.dll")
+            self.path("libvlccore.dll")
+            self.end_prefix()
+           
+        if self.prefix(src="../../libraries/i686-win32/lib/release/plugins/", dst="llplugin/plugins"):
+            self.path("*.dll")
+            self.end_prefix()
 
 	# Per platform MIME config on the cheap.  See SNOW-307 / DEV-41388
         self.path("skins/default/xui/en-us/mime_types_windows.xml", "skins/default/xui/en-us/mime_types.xml")
