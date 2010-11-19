@@ -448,6 +448,8 @@ void MediaPluginVLC::LoadURI(std::string uri)
 	/* No need to keep the media now */
 	libvlc_media_release (m);
 
+	libvlc_media_player_play(mp);
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -536,8 +538,6 @@ void MediaPluginVLC::update( F64 milliseconds )
 
 		/* Create a new item */
 		LoadURI(url);
-
-		libvlc_media_player_play(mp);
 	}
 };
 
