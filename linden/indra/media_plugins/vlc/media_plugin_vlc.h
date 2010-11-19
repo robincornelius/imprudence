@@ -90,6 +90,8 @@ public:
 		std::list <std::string> mMediaList;
 
 		bool mMoveNextMedia;
+
+		bool mPlayingForReal;
 };
 
 #endif

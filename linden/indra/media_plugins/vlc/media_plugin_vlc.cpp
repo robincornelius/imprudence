@@ -71,6 +71,8 @@ static void *lock(void *data, void **p_pixels)
 	else
 	{
 		*p_pixels = ppthis->mRenderBuffer;
+		if(ppthis->mCurrentInitState==MediaPluginVLC::STATUS_DANCEFINISHED)
+			ppthis->mPlayingForReal = true;
 	}
 
 	return NULL;
@@ -150,11 +152,13 @@ MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_
 {
 	mLastUpdateTime = 0;
 	sInstance=this;
-	mWidth=1;
-	mHeight=1;
+	mWidth=100;
+	mHeight=100;
 	mDepth=4;
 	mCurrentVolume = 0.25;
 	mMoveNextMedia = false;
+	mTextureWidth = 0;
+	mTextureHeight = 0;
 	
 }
 
@@ -407,6 +411,8 @@ void MediaPluginVLC::LoadURI(std::string uri)
 	mNaturalWidth = 0;
 	mNaturalHeight = 0;
 
+	mPlayingForReal = false;
+
 	if(mp)
 	{
 		libvlc_media_player_stop (mp);
@@ -448,12 +454,25 @@ void MediaPluginVLC::LoadURI(std::string uri)
 //
 void MediaPluginVLC::update( F64 milliseconds )
 {
-
 	if(!mp)
 		return;
 
 	static time_t last_clock=0;
 	
+	if(mPlayingForReal==false)
+	{
+		for(int y=0;y<mTextureHeight;y++)
+		{
+			for(int x=0;x<mTextureWidth*4;x=x+4)
+			{
+				*(mRenderBuffer+(y*mTextureWidth*4)+x)=rand()*255;
+				*(mRenderBuffer+(y*mTextureWidth*4)+x+1)=rand()*255;
+				*(mRenderBuffer+(y*mTextureWidth*4)+x+2)=rand()*255;
+			}
+		}
+		Invalidate();
+	}
+
 	switch(mCurrentInitState)
 	{
 		case STATE_GOTFMT:
@@ -462,7 +481,7 @@ void MediaPluginVLC::update( F64 milliseconds )
 			break;
 
 		case STATE_WAITSTOP:
-			if(this->mStatus==STATUS_DONE)
+			if(mStatus==STATUS_DONE)
 			{
 				 libvlc_video_set_format(mp, "RGBA", mNaturalWidth, mNaturalHeight, 4*mNaturalWidth); //size of init buffer
 				 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
