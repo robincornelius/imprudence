@@ -38,8 +38,6 @@ class MediaPluginVLC : public MediaPluginBase
 		bool init();
 		void update( F64 milliseconds );
 
-		bool mFirstTime;
-
 		time_t mLastUpdateTime;
 		enum Constants { ENumObjects = 10 };
 		unsigned char* mBackgroundPixels;
@@ -62,7 +60,7 @@ class MediaPluginVLC : public MediaPluginBase
 
 public:
 		libvlc_media_player_t *mp;
-		bool mSizeInit;
+		
 		bool mSizeChangeRequestSent;
 		
 	    void Invalidate();

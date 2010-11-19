@@ -148,13 +148,11 @@ void MediaPluginVLC::status_callback(const libvlc_event_t *ev, void *data)
 MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_func, void *host_user_data ) :
 	MediaPluginBase( host_send_func, host_user_data )
 {
-	mFirstTime = true;
 	mLastUpdateTime = 0;
 	sInstance=this;
 	mWidth=1;
 	mHeight=1;
 	mDepth=4;
-	mSizeInit=false;
 	mCurrentVolume = 0.25;
 	mMoveNextMedia = false;
 	
@@ -405,8 +403,9 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 
 void MediaPluginVLC::LoadURI(std::string uri)
 {
-	mSizeInit = false;
 	mSizeChangeRequestSent = false;
+	mNaturalWidth = 0;
+	mNaturalHeight = 0;
 
 	if(mp)
 	{
@@ -467,7 +466,7 @@ void MediaPluginVLC::update( F64 milliseconds )
 			{
 				 libvlc_video_set_format(mp, "RGBA", mNaturalWidth, mNaturalHeight, 4*mNaturalWidth); //size of init buffer
 				 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
-				 if(mNaturalWidth==this->mTextureWidth && mNaturalHeight==this->mTextureHeight)
+				 if(mNaturalWidth == mTextureWidth && mNaturalHeight == mTextureHeight)
 				 {
 					mCurrentInitState = STATUS_SIZECHANGECOMPLETE;
 				 }
