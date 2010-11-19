@@ -212,7 +212,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 				versions[ LLPLUGIN_MESSAGE_CLASS_MEDIA_BROWSER ] = LLPLUGIN_MESSAGE_CLASS_MEDIA_BROWSER_VERSION;
 				message.setValueLLSD( "versions", versions );
 				
-				std::string plugin_version = "VLC plugin, Version 1.0.0.0";
+				std::string plugin_version = "VLC plugin, Version 1.0 -- VLC Version :"+std::string(libvlc_get_version());
 
 				setStatus(STATUS_NONE);
 
