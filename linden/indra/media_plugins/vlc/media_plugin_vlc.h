@@ -44,6 +44,8 @@ class MediaPluginVLC : public MediaPluginBase
 		enum Constants { ENumObjects = 10 };
 		unsigned char* mBackgroundPixels;
 
+		void LoadURI(std::string uri);
+
 		int mColorR[ ENumObjects ];
 		int mColorG[ ENumObjects ];
 		int mColorB[ ENumObjects ];
@@ -86,6 +88,10 @@ public:
 
 		std::string mNowPlaying;
 		std::string mTitle;
+
+		std::list <std::string> mMediaList;
+
+		bool mMoveNextMedia;
 };
 
 #endif
