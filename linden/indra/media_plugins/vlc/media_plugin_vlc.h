@@ -30,7 +30,7 @@ class MediaPluginVLC : public MediaPluginBase
 		void size_change_request(int w,int h);
 
 		unsigned char * mRenderBuffer;
-		unsigned char mDummyRenderBuffer[100]; // 10x10 initBuffer
+		unsigned char mDummyRenderBuffer[400]; // 10x10 initBuffer
 
 		
 	private:
