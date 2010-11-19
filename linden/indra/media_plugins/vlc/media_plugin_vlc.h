@@ -55,7 +55,6 @@ class MediaPluginVLC : public MediaPluginBase
 
 		libvlc_instance_t * inst;
 		
-		libvlc_media_t *m;
 		libvlc_state_t mMediaState;
 		libvlc_event_manager_t *em;
 
@@ -85,6 +84,8 @@ public:
 
 		double mCurrentVolume;
 
+		std::string mNowPlaying;
+		std::string mTitle;
 };
 
 #endif

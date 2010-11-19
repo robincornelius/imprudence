@@ -327,14 +327,11 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 					 mSizeChangeRequestSent = false;
 
 					 /* Create a new item */
-					 m = libvlc_media_new_path (inst, uri.c_str());
+					 libvlc_media_t *m  = libvlc_media_new_path (inst, uri.c_str());
 				        
 					 /* Create a media player playing environement */
 					 mp = libvlc_media_player_new_from_media (m);
 				     
-					 /* No need to keep the media now */
-					 libvlc_media_release (m);
-
 					 //Listen to some events we might care about
 					 em = libvlc_media_player_event_manager(mp);
 					 libvlc_event_attach(em, libvlc_MediaPlayerPlaying, status_callback, this);
@@ -349,9 +346,14 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 					 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
 					 mCurrentInitState = STATE_WAITFMT;
 
-					libvlc_audio_set_volume(mp,mCurrentVolume*200);
+					 libvlc_audio_set_volume(mp,mCurrentVolume*200);
 
 					 setStatus(STATUS_LOADING);
+
+					 libvlc_media_parse_async(m);
+
+					 /* No need to keep the media now */
+					 libvlc_media_release (m);
 			    }
 			}
 			else
@@ -406,19 +408,8 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 void MediaPluginVLC::update( F64 milliseconds )
 {
 
-	// Meh
-
-	//start playing
-	//wait for framesize to arrive
-	//stop playing
-	//restart media
-	//init frame size
-	//start playing for real
-
-	//States
-	// PLAY_START
-	// 
-
+	static time_t last_clock=0;
+	
 	switch(mCurrentInitState)
 	{
 		case STATE_GOTFMT:
@@ -449,8 +440,29 @@ void MediaPluginVLC::update( F64 milliseconds )
 			}
 	}
 
+	if(clock()>last_clock+CLOCKS_PER_SEC)
+	{
+		//title poll *sigh* why don't meta events work on streams
+		libvlc_media_t *m = libvlc_media_player_get_media(mp);
+		if(libvlc_media_is_parsed(m))
+		{
+			char * nowPlaying = libvlc_media_get_meta(m,libvlc_meta_NowPlaying);
+			char * Title = libvlc_media_get_meta(m,libvlc_meta_Title);
 
+			if(nowPlaying && Title)
+			{
+				if(mNowPlaying.compare(nowPlaying) || mTitle.compare(Title))
+				{
+					mNowPlaying=nowPlaying;
+					mTitle=Title;
 
+					LLPluginMessage message(LLPLUGIN_MESSAGE_CLASS_MEDIA, "name_text");
+					message.setValue("name", mNowPlaying+" - "+mTitle);
+					sendMessage( message );
+				}
+			}
+		}
+	}
 };
 
 ////////////////////////////////////////////////////////////////////////////////
