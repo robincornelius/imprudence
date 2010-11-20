@@ -14,7 +14,17 @@ include(PluginAPI)
 include(MediaPluginBase)
 include(FindOpenGL)
 
-use_prebuilt_binary(libvlc)
+
+# set(VLC_FIND_QUIETLY ON)
+# set(VLC_FIND_REQUIRED ON)
+
+if (STANDALONE)
+#   include(FindVLC) #TODO
+else (STANDALONE)
+  use_prebuilt_binary(libvlc)
+#   set(VLC_LIBRARIES libvlc)
+#   set(VLC_INCLUDE_DIRS ${LIBS_PREBUILT_DIR}/include)
+endif (STANDALONE)
 
 include_directories(
     ${LLPLUGIN_INCLUDE_DIRS}
@@ -37,7 +47,7 @@ if(NOT CMAKE_SIZEOF_VOID_P MATCHES 4)
 endif (NOT CMAKE_SIZEOF_VOID_P MATCHES 4)
 
 set(media_plugin_vlc_SOURCE_FILES
-    media_plugin_vlc.cpp   
+    media_plugin_vlc.cpp
     )
 
 add_library(media_plugin_vlc
@@ -45,14 +55,25 @@ add_library(media_plugin_vlc
     ${media_plugin_vlc_SOURCE_FILES}
 )
 
-target_link_libraries(media_plugin_vlc
-  ${LLPLUGIN_LIBRARIES}
-  ${MEDIA_PLUGIN_BASE_LIBRARIES}
-  ${LLCOMMON_LIBRARIES}
-  ${PLUGIN_API_WINDOWS_LIBRARIES}
-  libvlc
-  libvlccore
-)
+if(LINUX)
+  target_link_libraries(media_plugin_vlc
+    ${LLPLUGIN_LIBRARIES}
+    ${MEDIA_PLUGIN_BASE_LIBRARIES}
+    ${LLCOMMON_LIBRARIES}
+    ${PLUGIN_API_WINDOWS_LIBRARIES}
+    vlc
+#     vlccore
+  )
+else(LINUX)
+  target_link_libraries(media_plugin_vlc
+    ${LLPLUGIN_LIBRARIES}
+    ${MEDIA_PLUGIN_BASE_LIBRARIES}
+    ${LLCOMMON_LIBRARIES}
+    ${PLUGIN_API_WINDOWS_LIBRARIES}
+    libvlc
+    libvlccore
+  )
+endif(LINUX)
 
 add_dependencies(media_plugin_vlc
   ${LLPLUGIN_LIBRARIES}

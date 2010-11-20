@@ -26,7 +26,7 @@ class MediaPluginVLC : public MediaPluginBase
 
 		void Invalidate();
 
-		static void MediaPluginVLC::status_callback(const libvlc_event_t *ev, void *data);
+		static void status_callback(const libvlc_event_t *ev, void *data);
 
 	public: // properties
 

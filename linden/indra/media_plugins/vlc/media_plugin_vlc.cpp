@@ -28,8 +28,9 @@
  * 
  * @endcond
  */
-
-#pragma warning( disable :  4189 )
+#ifdef LL_WINDOWS
+ #pragma warning( disable :  4189 )
+#endif
 
 #include "linden_common.h"
 
@@ -42,8 +43,9 @@
 #include <vlc/vlc.h>
 #include "media_plugin_vlc.h"
 
-#pragma warning( disable :  4189 )
-
+#ifdef LL_WINDOWS
+ #pragma warning( disable :  4189 )
+#endif
 ////////////////////////////////////////////////////////////////////////////////
 //
 static void *lock(void *data, void **p_pixels)
@@ -211,7 +213,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 
 				setStatus(STATUS_NONE);
 
-				char * options[] = {"path","--transform-type=vflip","--vout-filter=transform",NULL};
+				const char * options[] = {"path","--transform-type=vflip","--vout-filter=transform",NULL};
 
 				inst = libvlc_new (3, options);
 
@@ -498,6 +500,8 @@ void MediaPluginVLC::update( F64 milliseconds )
 				libvlc_media_player_play (mMediaPlayer);
 				mCurrentInitState= STATUS_DANCEFINISHED;
 			}
+		default:
+			break;//a default makes the compiler happy
 	}
 
 	if(clock()>last_clock+CLOCKS_PER_SEC)
