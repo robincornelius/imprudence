@@ -46,11 +46,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //
-
-MediaPluginVLC * MediaPluginVLC::sInstance;
-
-////////////////////////////////////////////////////////////////////////////////
-//
 static void *lock(void *data, void **p_pixels)
 {
 	MediaPluginVLC * ppthis = (MediaPluginVLC *)data;
@@ -58,7 +53,7 @@ static void *lock(void *data, void **p_pixels)
 	if(ppthis->mCurrentInitState==MediaPluginVLC::STATE_WAITFMT)
 	{
 		unsigned int px=0,py=0;
-		libvlc_video_get_size(ppthis->mp,0,&px,&py);
+		libvlc_video_get_size(ppthis->mMediaPlayer,0,&px,&py);
 		if(!ppthis->mSizeChangeRequestSent && px>0 && py>0)
 		{
 			ppthis->mCurrentInitState = MediaPluginVLC::STATE_GOTFMT;
@@ -110,7 +105,7 @@ void MediaPluginVLC::status_callback(const libvlc_event_t *ev, void *data)
 
 		case libvlc_MediaPlayerEndReached:
 			{
-				libvlc_media_t *m = libvlc_media_player_get_media(pthis->mp);
+				libvlc_media_t *m = libvlc_media_player_get_media(pthis->mMediaPlayer);
 				libvlc_media_list_t * sub = libvlc_media_subitems(m);
 		
 				if(!sub)
@@ -151,7 +146,6 @@ MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_
 	MediaPluginBase( host_send_func, host_user_data )
 {
 	mLastUpdateTime = 0;
-	sInstance=this;
 	mWidth=100;
 	mHeight=100;
 	mDepth=4;
@@ -159,6 +153,7 @@ MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_
 	mMoveNextMedia = false;
 	mTextureWidth = 0;
 	mTextureHeight = 0;
+	mMediaPlayer = 0;
 	
 }
 
@@ -166,10 +161,10 @@ MediaPluginVLC::MediaPluginVLC( LLPluginInstance::sendMessageFunction host_send_
 //
 MediaPluginVLC::~MediaPluginVLC()
 {
-	if(mp)
+	if(mMediaPlayer)
 	{
-		libvlc_media_player_stop (mp);
-		libvlc_media_player_release (mp);
+		libvlc_media_player_stop (mMediaPlayer);
+		libvlc_media_player_release (mMediaPlayer);
 	}
  
 	if(inst)
@@ -180,7 +175,7 @@ MediaPluginVLC::~MediaPluginVLC()
 
 ////////////////////////////////////////////////////////////////////////////////
 //
-void  MediaPluginVLC::size_change_request(int w,int h)
+void  MediaPluginVLC::sizeChangeRequest(int w,int h)
 {
 	LLPluginMessage message(LLPLUGIN_MESSAGE_CLASS_MEDIA, "size_change_request");
 	message.setValue("name", mTextureSegmentName);
@@ -365,22 +360,22 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 		}
 		else if(message_class == LLPLUGIN_MESSAGE_CLASS_MEDIA_TIME)
 		{
-			if(mp==NULL)
+			if(mMediaPlayer==NULL)
 			{
 				//media player is dead, ignore
 				return;
 			}
 			if(message_name == "stop")
 			{
-				 libvlc_media_player_stop (mp);
+				 libvlc_media_player_stop (mMediaPlayer);
 			}
 			else if(message_name == "start")
 			{
-				 libvlc_media_player_play(mp);
+				 libvlc_media_player_play(mMediaPlayer);
 			}
 			else if(message_name == "pause")
 			{
-				libvlc_media_player_pause (mp);	
+				libvlc_media_player_pause (mMediaPlayer);	
 			}
 			else if(message_name == "seek")
 			{
@@ -394,7 +389,7 @@ void MediaPluginVLC::receiveMessage( const char* message_string )
 			else if(message_name == "set_volume")
 			{
 				F64 volume = message_in.getValueReal("volume");
-				libvlc_audio_set_volume(mp,volume*200);
+				libvlc_audio_set_volume(mMediaPlayer,volume*200);
 				mCurrentVolume = volume;
 			}
 		}
@@ -413,20 +408,20 @@ void MediaPluginVLC::LoadURI(std::string uri)
 
 	mPlayingForReal = false;
 
-	if(mp)
+	if(mMediaPlayer)
 	{
-		libvlc_media_player_stop (mp);
-		libvlc_media_player_release (mp);
+		libvlc_media_player_stop (mMediaPlayer);
+		libvlc_media_player_release (mMediaPlayer);
 	}
  
 	/* Create a new item */
 	libvlc_media_t *m  = libvlc_media_new_path (inst, uri.c_str());
 		        
 	/* Create a media player playing environement */
-	mp = libvlc_media_player_new_from_media (m);
+	mMediaPlayer = libvlc_media_player_new_from_media (m);
 	    
 	//Listen to some events we might care about
-	em = libvlc_media_player_event_manager(mp);
+	em = libvlc_media_player_event_manager(mMediaPlayer);
 	libvlc_event_attach(em, libvlc_MediaPlayerPlaying, status_callback, this);
 	libvlc_event_attach(em, libvlc_MediaPlayerPaused, status_callback, this);
 	libvlc_event_attach(em, libvlc_MediaPlayerStopped, status_callback, this);
@@ -435,11 +430,11 @@ void MediaPluginVLC::LoadURI(std::string uri)
 	libvlc_event_attach(em, libvlc_MediaPlayerEndReached, status_callback, this);
 	libvlc_event_attach(em, libvlc_MediaPlayerEncounteredError, status_callback, this);
 
-	libvlc_video_set_format(mp, "RGBA", 10, 10, 4*10); //size of init buffer
-	libvlc_video_set_callbacks(mp, lock, unlock, display, this);
+	libvlc_video_set_format(mMediaPlayer, "RGBA", 10, 10, 4*10); //size of init buffer
+	libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, this);
 	mCurrentInitState = STATE_WAITFMT;
 
-	libvlc_audio_set_volume(mp,mCurrentVolume*200);
+	libvlc_audio_set_volume(mMediaPlayer,mCurrentVolume*200);
 
 	setStatus(STATUS_LOADING);
 
@@ -448,7 +443,7 @@ void MediaPluginVLC::LoadURI(std::string uri)
 	/* No need to keep the media now */
 	libvlc_media_release (m);
 
-	libvlc_media_player_play(mp);
+	libvlc_media_player_play(mMediaPlayer);
 
 }
 
@@ -456,7 +451,7 @@ void MediaPluginVLC::LoadURI(std::string uri)
 //
 void MediaPluginVLC::update( F64 milliseconds )
 {
-	if(!mp)
+	if(!mMediaPlayer)
 		return;
 
 	static time_t last_clock=0;
@@ -478,29 +473,29 @@ void MediaPluginVLC::update( F64 milliseconds )
 	switch(mCurrentInitState)
 	{
 		case STATE_GOTFMT:
-			libvlc_media_player_stop (mp);
+			libvlc_media_player_stop (mMediaPlayer);
 			mCurrentInitState = STATE_WAITSTOP;
 			break;
 
 		case STATE_WAITSTOP:
 			if(mStatus==STATUS_DONE)
 			{
-				 libvlc_video_set_format(mp, "RGBA", mNaturalWidth, mNaturalHeight, 4*mNaturalWidth); //size of init buffer
-				 libvlc_video_set_callbacks(mp, lock, unlock, display, this);
+				 libvlc_video_set_format(mMediaPlayer, "RGBA", mNaturalWidth, mNaturalHeight, 4*mNaturalWidth); //size of init buffer
+				 libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, this);
 				 if(mNaturalWidth == mTextureWidth && mNaturalHeight == mTextureHeight)
 				 {
 					mCurrentInitState = STATUS_SIZECHANGECOMPLETE;
 				 }
 				 else
 				 {
-					 size_change_request(mNaturalWidth, mNaturalHeight);
+					 sizeChangeRequest(mNaturalWidth, mNaturalHeight);
 					 mCurrentInitState = STATUS_WAITSIZECHANGE;
 				 }
 			}
 			break;
 		case STATUS_SIZECHANGECOMPLETE:
 			{
-				libvlc_media_player_play (mp);
+				libvlc_media_player_play (mMediaPlayer);
 				mCurrentInitState= STATUS_DANCEFINISHED;
 			}
 	}
@@ -508,7 +503,7 @@ void MediaPluginVLC::update( F64 milliseconds )
 	if(clock()>last_clock+CLOCKS_PER_SEC)
 	{
 		//title poll *sigh* why don't meta events work on streams
-		libvlc_media_t *m = libvlc_media_player_get_media(mp);
+		libvlc_media_t *m = libvlc_media_player_get_media(mMediaPlayer);
 		if(libvlc_media_is_parsed(m))
 		{
 			char * nowPlaying = libvlc_media_get_meta(m,libvlc_meta_NowPlaying);
