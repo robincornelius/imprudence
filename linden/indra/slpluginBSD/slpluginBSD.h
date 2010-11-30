@@ -1,15 +1,7 @@
 #ifndef _SLPLUGINBSD_H
 #define _SLPLUGINBSD_H
 
-#ifdef LL_WINDOWS
-
-#include "winsock2.h"
-#include "windows.h"
-
-#endif
-
-
-class SLP
+class SLP : public LLPluginInstanceMessageListener
 {
 public:
 	SLP();
@@ -25,7 +17,7 @@ public:
 		STATE_INITIALIZED,		// init() has been called
 		STATE_SOCKETGO,	// listening for incoming connection
 		STATE_SEND_HELLO,
-		STATE_WAIT_HELLO,
+		STATE_RUN,
 		STATE_EXITING,			// Tried to kill process, waiting for it to exit
 		STATE_DONE				//
 
@@ -40,15 +32,36 @@ public:
 
 	CRITICAL_SECTION mCriticalSection;
 
+	void receivePluginMessage(const std::string &message);
+
 
 private:
 
 	void setupSocket();
 	static DWORD messagethread(LPVOID * user_data);
-	void sendmessage(LLPluginMessage &msg);
 
+	void sendMessageToParent(LLPluginMessage &msg);
+	void sendMessageToPlugin(const LLPluginMessage &message);
+
+	void processmessage(LLPluginMessage msg);
 	
+	std::string mPluginFile;
 
+	typedef void (*sendMessageFunction) (const char *message_string, void **user_data);
+	typedef int (*pluginInitFunction) (sendMessageFunction host_send_func, void *host_user_data, sendMessageFunction *plugin_send_func, void **plugin_user_data);
+	
+	pluginInitFunction mInitFunction;
+
+	static const char *PLUGIN_INIT_FUNCTION_NAME;
+
+	LLPluginInstance * mInstance;
+
+	bool mBlockingRequest;
+
+	typedef std::map<std::string, LLPluginSharedMemory*> sharedMemoryRegionsType;
+	sharedMemoryRegionsType mSharedMemoryRegions;
+
+	F64 mSleepTime;
 
 };
 

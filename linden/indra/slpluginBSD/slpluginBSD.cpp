@@ -1,6 +1,7 @@
 
 //SORRY this is a bit windows centric currently 
 
+#include "windows.h"
 #include <iostream>
 #include <queue>
 #include <stdio.h>
@@ -8,13 +9,18 @@
 #include <io.h>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <set>
+
+#include "stdtypes.h"
+#include "lltimer.h"
 
 #include "llpluginmessage.h"
 #include "llpluginmessageclasses.h"
+#include "llplugininstance.h"
+#include "llpluginsharedmemory.h"
+#include "llpluginprocesschild.h"
 #include "slpluginBSD.h"
-
-
 
 
 
@@ -23,6 +29,9 @@ using namespace std;
 
 #ifdef LL_WINDOWS
 void RedirectIOToConsole();
+
+
+
 
 
 int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
@@ -38,12 +47,37 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	char * end;
 	int port = strtol(lpCmdLine, &end, 10);
 
-	SLP instance;
-	instance.mPort=port;
-	instance.run();
-	Sleep(30000); //debug pause so we can read the console
+	WORD wVersionRequested;
+    WSADATA wsaData;
+
+	wVersionRequested = MAKEWORD(2, 2);
+    WSAStartup(wVersionRequested, &wsaData);
 
 
+	LLPluginProcessChild *plugin = new LLPluginProcessChild();
+	plugin->init(port);
+
+	LLTimer timer;
+	timer.start();
+	
+	while(!plugin->isDone())
+	{
+		timer.reset();
+		plugin->idle();
+
+		F64 elapsed = timer.getElapsedTimeF64();
+		F64 remaining = plugin->getSleepTime() - elapsed;
+
+		if(remaining <= 0.0f)
+		{
+			plugin->pump();
+		}
+		else
+		{
+			plugin->sleep(remaining);
+		}
+	}
+	
 }
 
 static const WORD MAX_CONSOLE_LINES = 500;
@@ -155,11 +189,14 @@ SLP::SLP()
 	wVersionRequested = MAKEWORD(2, 2);
     WSAStartup(wVersionRequested, &wsaData);
 
+	mInstance = new LLPluginInstance(this);
+
 }
 
 SLP::~SLP()
 {
 	 DeleteCriticalSection(&mCriticalSection);
+	 delete(mInstance);
 }
 
 void SLP::run()
@@ -174,13 +211,29 @@ void SLP::run()
 				break;
 		
 			case STATE_SOCKETGO:
-				Sleep(10000);
+				Sleep(1000);
 				cout << "sending hello \n";
-				sendmessage(LLPluginMessage(LLPLUGIN_MESSAGE_CLASS_INTERNAL, "hello"));
-				mState = STATE_WAIT_HELLO; 
+				sendMessageToParent(LLPluginMessage(LLPLUGIN_MESSAGE_CLASS_INTERNAL, "hello"));
+				mState = STATE_RUN; 
 				break;
 
-			case STATE_WAIT_HELLO:
+			case STATE_RUN:
+				EnterCriticalSection(&mCriticalSection);
+				
+				if(!recvQueue.empty())
+				{
+					std::string msg = recvQueue.front();
+					recvQueue.pop();
+
+					LLPluginMessage pmsg;
+					pmsg.parse(msg);
+
+					processmessage(pmsg);
+
+				}
+
+				LeaveCriticalSection(&mCriticalSection);
+
 				break;
 		}
 
@@ -244,7 +297,7 @@ DWORD SLP::messagethread(LPVOID * user_data)
 
 		if(toSend)
 		{
-			cout << "Sending message "<<send_msg<<"\n";		
+			cout << "Sending message "<<send_msg<<"\n";	
 			int len = send(pthis->mListenSocket,send_msg.c_str(),send_msg.length(),0);
 			cout << "sent length "<<len;
 			int nError=WSAGetLastError();
@@ -299,7 +352,7 @@ DWORD SLP::messagethread(LPVOID * user_data)
 
 
 
-void SLP::sendmessage(LLPluginMessage &msg)
+void SLP::sendMessageToParent(LLPluginMessage &msg)
 {
 	cout << "Got message to send\n";
 	EnterCriticalSection(&mCriticalSection);
@@ -308,3 +361,175 @@ void SLP::sendmessage(LLPluginMessage &msg)
 	LeaveCriticalSection(&mCriticalSection);
 
 }
+
+void SLP::processmessage(LLPluginMessage msg)
+{
+
+	if(msg.getClass()==LLPLUGIN_MESSAGE_CLASS_INTERNAL)
+	{
+
+		std::string message_name = msg.getName();
+		if(message_name == "load_plugin")
+		{
+			mPluginFile = msg.getValue("file");
+			mInstance->load(mPluginFile);
+		}
+		else if(message_name == "shm_add")
+		{
+				std::string name = msg.getValue("name");
+				size_t size = (size_t)msg.getValueS32("size");
+				
+				sharedMemoryRegionsType::iterator iter = mSharedMemoryRegions.find(name);
+				if(iter != mSharedMemoryRegions.end())
+				{
+					// Need to remove the old region first
+					//LL_WARNS("Plugin") << "Adding a duplicate shared memory segment!" << LL_ENDL;
+				}
+				else
+				{
+					// This is a new region
+					LLPluginSharedMemory *region = new LLPluginSharedMemory;
+					if(region->attach(name, size))
+					{
+						mSharedMemoryRegions.insert(sharedMemoryRegionsType::value_type(name, region));
+						
+						std::stringstream addr;
+						addr << region->getMappedAddress();
+						
+						// Send the add notification to the plugin
+						LLPluginMessage message("base", "shm_added");
+						message.setValue("name", name);
+						message.setValueS32("size", (S32)size);
+						message.setValuePointer("address", region->getMappedAddress());
+						sendMessageToPlugin(message);
+						
+						// and send the response to the parent
+						message.setMessage(LLPLUGIN_MESSAGE_CLASS_INTERNAL, "shm_add_response");
+						message.setValue("name", name);
+						sendMessageToParent(message);
+					}
+					else
+					{
+						//LL_WARNS("Plugin") << "Couldn't create a shared memory segment!" << LL_ENDL;
+						delete region;
+					}
+				}
+				
+			}
+			else if(message_name == "shm_remove")
+			{
+				std::string name = msg.getValue("name");
+				sharedMemoryRegionsType::iterator iter = mSharedMemoryRegions.find(name);
+				if(iter != mSharedMemoryRegions.end())
+				{
+					// forward the remove request to the plugin -- its response will trigger us to detach the segment.
+					LLPluginMessage message("base", "shm_remove");
+					message.setValue("name", name);
+					sendMessageToPlugin(message);
+				}
+				else
+				{
+					//LL_WARNS("Plugin") << "shm_remove for unknown memory segment!" << LL_ENDL;
+				}
+			}
+			else if(message_name == "sleep_time")
+			{
+				mSleepTime = msg.getValueReal("time");
+			}
+			else if(message_name == "crash")
+			{
+				// Crash the plugin
+				//LL_ERRS("Plugin") << "Plugin crash requested." << LL_ENDL;
+				int * p =0;
+				(*p)=1;
+			}
+			else if(message_name == "hang")
+			{
+				// Hang the plugin
+				//LL_WARNS("Plugin") << "Plugin hang requested." << LL_ENDL;
+				while(1)
+				{
+					// wheeeeeeeee......
+				}
+			}
+
+
+	}
+}
+
+void SLP::receivePluginMessage(const std::string &message)
+{
+
+		// Incoming message from the plugin instance
+		bool passMessage = true;
+
+		LLPluginMessage parsed;
+		parsed.parse(message);
+		
+		if(parsed.hasValue("blocking_request"))
+		{
+			mBlockingRequest = true;
+		}
+
+		std::string message_class = parsed.getClass();
+		if(message_class == "base")
+		{
+			std::string message_name = parsed.getName();
+			if(message_name == "init_response")
+			{
+				// The plugin has finished initializing.
+				//setState(STATE_RUNNING);
+
+				// Don't pass this message up to the parent
+				passMessage = false;
+				
+				LLPluginMessage new_message(LLPLUGIN_MESSAGE_CLASS_INTERNAL, "load_plugin_response");
+				LLSD versions = parsed.getValueLLSD("versions");
+				new_message.setValueLLSD("versions", versions);
+				
+				if(parsed.hasValue("plugin_version"))
+				{
+					std::string plugin_version = parsed.getValue("plugin_version");
+					new_message.setValueLLSD("plugin_version", plugin_version);
+				}
+
+				// Let the parent know it's loaded and initialized.
+				sendMessageToParent(new_message);
+			}
+			else if(message_name == "shm_remove_response")
+			{
+				// Don't pass this message up to the parent
+				passMessage = false;
+
+				std::string name = parsed.getValue("name");
+				sharedMemoryRegionsType::iterator iter = mSharedMemoryRegions.find(name);				
+				if(iter != mSharedMemoryRegions.end())
+				{
+					// detach the shared memory region
+					iter->second->detach();
+					
+					// and remove it from our map
+					mSharedMemoryRegions.erase(iter);
+					
+					// Finally, send the response to the parent.
+					LLPluginMessage message(LLPLUGIN_MESSAGE_CLASS_INTERNAL, "shm_remove_response");
+					message.setValue("name", name);
+					sendMessageToParent(message);
+				}
+				else
+				{
+					//LL_WARNS("Plugin") << "shm_remove_response for unknown memory segment!" << LL_ENDL;
+				}
+			}
+		}
+	
+}
+
+
+void SLP::sendMessageToPlugin(const LLPluginMessage &message)
+{
+
+	//this->mInstance->sendMessage();
+
+}
+

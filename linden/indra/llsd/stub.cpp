@@ -25,6 +25,7 @@
  * THE SOFTWARE.
  * $/LicenseInfo$
  */
+#define _CRT_SECURE_NO_WARNINGS
 
 #include "stub.h"
 

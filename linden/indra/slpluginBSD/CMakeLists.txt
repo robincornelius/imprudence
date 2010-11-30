@@ -21,12 +21,23 @@ endif (DARWIN)
 set(SLPluginBSD_SOURCE_FILES
     slpluginBSD.cpp
     llpluginmessage.cpp
+    llplugininstance.cpp
+    llpluginsharedmemory.cpp
+    llpluginprocesschild.cpp
+    llpluginmessagepipe.cpp
+    lltimer.cpp
     )
 
                         
 set(SLPluginBSD_HEADER_FILES
     slpluginBSD.h
      llpluginmessage.h
+     llplugininstance.h
+     llpluginsharedmemory.h
+     llpluginprocesschild.h
+     llpluginmessagepipe.h
+     lltimer.h
+
     )
     
 
@@ -47,6 +58,7 @@ add_executable(SLPluginBSD
 target_link_libraries(SLPluginBSD
     wsock32.lib
     ws2_32.lib
+    Advapi32.lib
      ${LLSD_LIBRARIES}
     debug ${ARCH_PREBUILT_DIRS_DEBUG}/${EXPAT_LIBRARIES}.lib
     optimized ${ARCH_PREBUILT_DIRS_RELEASE}/${EXPAT_LIBRARIES}.lib
