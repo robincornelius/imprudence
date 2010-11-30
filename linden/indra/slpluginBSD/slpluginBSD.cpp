@@ -3,13 +3,19 @@
 
 #include <iostream>
 #include <queue>
-#include "slpluginBSD.h"
-
 #include <stdio.h>
 #include <fcntl.h>
 #include <io.h>
 #include <iostream>
 #include <fstream>
+#include <set>
+
+#include "llpluginmessage.h"
+#include "llpluginmessageclasses.h"
+#include "slpluginBSD.h"
+
+
+
 
 
 using namespace std;
@@ -167,7 +173,11 @@ void SLP::run()
 				mState = STATE_INITIALIZED; 
 				break;
 		
-			case STATE_SOCKETGO:	
+			case STATE_SOCKETGO:
+				Sleep(10000);
+				cout << "sending hello \n";
+				sendmessage(LLPluginMessage(LLPLUGIN_MESSAGE_CLASS_INTERNAL, "hello"));
+				mState = STATE_WAIT_HELLO; 
 				break;
 
 			case STATE_WAIT_HELLO:
@@ -197,6 +207,10 @@ void SLP::setupSocket()
 
 	cout << "Socket is connected to parent.... \n";
 
+	// If iMode!=0, non-blocking mode is enabled.
+	u_long iMode=1;
+	ioctlsocket(mListenSocket,FIONBIO,&iMode);
+
 	CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)&SLP::messagethread,this,0,NULL);
 
 }
@@ -204,9 +218,13 @@ void SLP::setupSocket()
 //static
 DWORD SLP::messagethread(LPVOID * user_data)
 {
+	cout << "thread start \n";
+
 	SLP * pthis = (SLP*)user_data;
 
 	pthis->mState = SLP::STATE_SOCKETGO;
+
+	cout << "Socket is go \n";
 
 	while(pthis->mState<SLP::STATE_DONE)
 	{
@@ -215,21 +233,36 @@ DWORD SLP::messagethread(LPVOID * user_data)
 		std::string send_msg;
 
 		EnterCriticalSection(&pthis->mCriticalSection);
-		
+		bool toSend = false;
 		if(!pthis->sendQueue.empty())
 		{
+			toSend = true;
 			send_msg = pthis->sendQueue.front();
 			pthis->sendQueue.pop();
 		}
 		LeaveCriticalSection(&pthis->mCriticalSection);
 
-		send(pthis->mListenSocket,send_msg.c_str(),send_msg.length(),0);
+		if(toSend)
+		{
+			cout << "Sending message "<<send_msg<<"\n";		
+			int len = send(pthis->mListenSocket,send_msg.c_str(),send_msg.length(),0);
+			cout << "sent length "<<len;
+			int nError=WSAGetLastError();
+			if(nError!=WSAEWOULDBLOCK&&nError!=0)
+			{
+				//meh we are borked
+				cout << "send() error "<<WSAGetLastError()<<"\n";
+
+			}
+			char meh=0;
+
+			len = send(pthis->mListenSocket,&meh,1,0);
+		}
 
 		char buf[1024]; // urrrg static buffers
+		memset(buf,0,1024);
 
 		int len = recv(pthis->mListenSocket,buf,1024,0); ///baaaaag blocking fix me
-
-		cout<<"Data recv() len "<<len<<"content -- "<<buf<<"\n\n";
 
 		if(len==0)
 		{
@@ -238,7 +271,9 @@ DWORD SLP::messagethread(LPVOID * user_data)
 			return 0;
 		}
 
-		if(len==SOCKET_ERROR)
+		int nError=WSAGetLastError();
+
+		if(nError!=WSAEWOULDBLOCK&&nError!=0)
 		{
 			//meh we are borked
 			cout << "recv() error "<<WSAGetLastError()<<"\n";
@@ -247,12 +282,29 @@ DWORD SLP::messagethread(LPVOID * user_data)
 		}
 		else
 		{
-			EnterCriticalSection(&pthis->mCriticalSection);
-			pthis->recvQueue.push(std::string(buf));
-			LeaveCriticalSection(&pthis->mCriticalSection);
+			if(len>0)
+			{
+				cout<<"Data recv() len "<<len<<"content -- "<<buf<<"\n\n";
+
+				EnterCriticalSection(&pthis->mCriticalSection);
+				pthis->recvQueue.push(std::string(buf));
+				LeaveCriticalSection(&pthis->mCriticalSection);
+			}
 		}
 		
 	}
 
 	return 0;
+}
+
+
+
+void SLP::sendmessage(LLPluginMessage &msg)
+{
+	cout << "Got message to send\n";
+	EnterCriticalSection(&mCriticalSection);
+	cout << "queue message\n";
+	sendQueue.push(msg.generate());
+	LeaveCriticalSection(&mCriticalSection);
+
 }

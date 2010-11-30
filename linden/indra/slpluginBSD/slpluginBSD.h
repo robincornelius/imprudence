@@ -45,6 +45,7 @@ private:
 
 	void setupSocket();
 	static DWORD messagethread(LPVOID * user_data);
+	void sendmessage(LLPluginMessage &msg);
 
 	
 
