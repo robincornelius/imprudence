@@ -61,8 +61,9 @@
 #include "llviewerwindow.h"
 #include "llviewerdisplay.h"
 #include "llviewermedia.h"
-
-
+#include "llv4math.h"		// for LL_VECTORIZE
+#include "llviewerparcelmedia.h"
+#include "llviewermediafocus.h"
 #include "llviewermessage.h"
 #include "llviewerobjectlist.h"
 #include "llworldmap.h"
@@ -103,7 +104,8 @@
 #include "llassetstorage.h"
 #include "llpolymesh.h"
 #include "llcachename.h"
-#include "audioengine.h"
+#include "llaudioengine.h"
+#include "llstreamingaudio.h"
 #include "llviewermenu.h"
 #include "llselectmgr.h"
 #include "lltrans.h"
@@ -174,9 +176,13 @@
 
 #include "llcommandlineparser.h"
 
-#include "hippoGridManager.h"
-#include "hippoLimits.h"
-#include "hippoUpdate.h"
+#include "hippogridmanager.h"
+#include "hippolimits.h"
+#include "hippoupdate.h"
+
+// [RLVa:KB]
+#include "rlvhandler.h"
+// [/RLVa:KB]
 
 // *FIX: These extern globals should be cleaned up.
 // The globals either represent state/config/resource-storage of either 
@@ -328,7 +334,15 @@ static std::string gHelperURI;
 void idle_afk_check()
 {
 	// check idle timers
+	//if (gAllowIdleAFK && (gAwayTriggerTimer.getElapsedTimeF32() > gSavedSettings.getF32("AFKTimeout")))
+// [RLVa:KB] - Checked: 2009-10-19 (RLVa-1.1.0g) | Added: RLVa-1.1.0g
+#ifdef RLV_EXTENSION_CMD_ALLOWIDLE
+	if ( (gAllowIdleAFK || gRlvHandler.hasBehaviour(RLV_BHVR_ALLOWIDLE)) &&
+		 (gAwayTriggerTimer.getElapsedTimeF32() > gSavedSettings.getF32("AFKTimeout")))
+#else
 	if (gAllowIdleAFK && (gAwayTriggerTimer.getElapsedTimeF32() > gSavedSettings.getF32("AFKTimeout")))
+#endif // RLV_EXTENSION_CMD_ALLOWIDLE
+// [/RLVa:KB]
 	{
 		gAgent.setAFK();
 	}
@@ -348,7 +362,7 @@ void request_initial_instant_messages()
 	static BOOL requested = FALSE;
 	if (!requested
 		&& gMessageSystem
-		&& LLMuteList::getInstance()->isLoaded()
+		//&& LLMuteList::getInstance()->isLoaded() //We don't always want to have a mute list module
 		&& gAgent.getAvatarObject())
 	{
 		// Auto-accepted inventory items may require the avatar object
@@ -427,8 +441,6 @@ static void settings_to_globals()
 	gShowObjectUpdates = gSavedSettings.getBOOL("ShowObjectUpdates");
 	gMapScale = gSavedSettings.getF32("MapScale");
 	LLHoverView::sShowHoverTips = gSavedSettings.getBOOL("ShowHoverTips");
-
-	LLCubeMap::sUseCubeMaps = LLFeatureManager::getInstance()->isFeatureAvailable("RenderCubeMap");
 
 	LLSlider::setScrollWheelMultiplier( gSavedSettings.getS32("SliderScrollWheelMultiplier") );
 
@@ -706,8 +718,15 @@ bool LLAppViewer::init()
 	LLViewerJointMesh::updateVectorize();
 
 	// load MIME type -> media impl mappings
-	LLMIMETypes::parseMIMETypes( std::string("mime_types.xml") ); 
-
+	std::string mime_types_name;
+#if LL_DARWIN
+	mime_types_name = "mime_types_mac.xml";
+#elif LL_LINUX
+	mime_types_name = "mime_types_linux.xml";
+#else
+	mime_types_name = "mime_types_windows.xml";
+#endif
+	LLMIMETypes::parseMIMETypes( mime_types_name ); 
 
 	// Copy settings to globals. *TODO: Remove or move to appropriage class initializers
 	settings_to_globals();
@@ -766,6 +785,9 @@ bool LLAppViewer::init()
 	// Initialize the window
 	//
 	initWindow();
+
+	// initWindow also initializes the Feature List, so now we can initialize this global.
+	LLCubeMap::sUseCubeMaps = LLFeatureManager::getInstance()->isFeatureAvailable("RenderCubeMap");
 
 	{
 		BOOL download = gSavedSettings.getBOOL("DownloadClientTags");
@@ -1063,9 +1085,7 @@ bool LLAppViewer::mainLoop()
 				}
 
 
-				const F64 min_frame_time = 0.0; //(.0333 - .0010); // max video frame rate = 30 fps
-				const F64 min_idle_time = 0.0; //(.0010); // min idle time = 1 ms
-				const F64 max_idle_time = run_multiple_threads ? min_idle_time : llmin(.005*10.0*gFrameTimeSeconds, 0.005); // 5 ms a second
+				const F64 max_idle_time = run_multiple_threads ? 0.0 : llmin(.005*10.0*gFrameIntervalSeconds, 0.005); // 50ms/second, no more than 5ms/frame
 				idleTimer.reset();
 				while(1)
 				{
@@ -1081,11 +1101,8 @@ bool LLAppViewer::mainLoop()
 						ms_sleep(llmin(io_pending/100,100)); // give the vfs some time to catch up
 					}
 
-					F64 frame_time = frameTimer.getElapsedTimeF64();
 					F64 idle_time = idleTimer.getElapsedTimeF64();
-					if (frame_time >= min_frame_time &&
-						idle_time >= min_idle_time &&
-						(!work_pending || idle_time >= max_idle_time))
+					if (!work_pending || idle_time >= max_idle_time)
 					{
 						break;
 					}
@@ -1162,16 +1179,6 @@ bool LLAppViewer::mainLoop()
 
 bool LLAppViewer::cleanup()
 {
-	//----------------------------------------------
-	//this test code will be removed after the test
-	//test manual call stack tracer
-	if(gSavedSettings.getBOOL("QAMode"))
-	{
-		LLError::LLCallStacks::print() ;
-	}
-	//end of the test code
-	//----------------------------------------------
-
 	//flag all elements as needing to be destroyed immediately
 	// to ensure shutdown order
 	LLMortician::setZealous(TRUE);
@@ -1184,6 +1191,22 @@ bool LLAppViewer::cleanup()
 	disconnectViewer();
 
 	llinfos << "Viewer disconnected" << llendflush;
+
+	if (!mQuitRequested)			//not doing it on quit, because the quitting voiceclient
+	{					//*might* crash imprudence TODO: fix the voiceclient instead
+		//this deletes all your buddies
+		LLAvatarTracker::instance().reset();
+		// reset group data. Blame LL for the need to clear a member variable through a global
+		LLGroupMgr::getInstance()->clearGroups();
+		gAgent.mGroups.clear();
+	}
+
+	//reset balance for not playing the UI-Sound 
+	//when relogging into another account 
+	if (gStatusBar)
+	{
+		gStatusBar->clearBalance();
+	}
 
 	if (mQuitRequested)
 	{
@@ -1257,6 +1280,14 @@ bool LLAppViewer::cleanup()
 
 	if (gAudiop)
 	{
+		// shut down the streaming audio sub-subsystem first, in case it relies on not outliving the general audio subsystem.
+
+		LLStreamingAudioInterface *sai = gAudiop->getStreamingAudioImpl();
+		delete sai;
+		gAudiop->setStreamingAudioImpl(NULL);
+
+		// shut down the audio subsystem
+
 		bool want_longname = false;
 		if (gAudiop->getDriverName(want_longname) == "FMOD")
 		{
@@ -1457,8 +1488,11 @@ bool LLAppViewer::cleanup()
 		pending += LLAppViewer::getTextureFetch()->update(1); // unpauses the texture fetch thread
 		pending += LLVFSThread::updateClass(0);
 		pending += LLLFSThread::updateClass(0);
-		F64 idle_time = idleTimer.getElapsedTimeF64();
-		if (!pending || idle_time >= max_idle_time)
+		if (pending == 0)
+		{
+			break;
+		}
+		if (idleTimer.getElapsedTimeF64() >= max_idle_time)
 		{
 			llwarns << "Quitting with pending background tasks." << llendl;
 			break;
@@ -1483,7 +1517,9 @@ bool LLAppViewer::cleanup()
 	//Note:
 	//LLViewerMedia::cleanupClass() has to be put before gImageList.shutdown()
 	//because some new image might be generated during cleaning up media. --bao
+	LLViewerMediaFocus::cleanupClass();
 	LLViewerMedia::cleanupClass();
+	LLViewerParcelMedia::cleanupClass();
 	gImageList.shutdown(); // shutdown again in case a callback added something
 	LLUIImageList::getInstance()->cleanUp();
 	
@@ -1781,7 +1817,7 @@ bool LLAppViewer::initConfiguration()
 	// - set procedural settings 
 	gSavedSettings.setString("ClientSettingsFile", 
         // gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, getSettingsFilename("Default", "Global")));
-        gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "settings_imprudence.xml"));
+        gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "settings_imprudence_experimental.xml"));
 
 	gSavedSettings.setString("VersionChannelName", ViewerVersion::getImpViewerName());
 
@@ -2676,34 +2712,31 @@ void LLAppViewer::initMarkerFile()
 	std::string llerror_marker_file = gDirUtilp->getExpandedFilename(LL_PATH_LOGS, LLERROR_MARKER_FILE_NAME);
 	std::string error_marker_file = gDirUtilp->getExpandedFilename(LL_PATH_LOGS, ERROR_MARKER_FILE_NAME);
 
-	
 	if (LLAPRFile::isExist(mMarkerFileName, LL_APR_RB) && !anotherInstanceRunning())
 	{
 		gLastExecEvent = LAST_EXEC_FROZE;
 		LL_INFOS("MarkerFile") << "Exec marker found: program froze on previous execution" << LL_ENDL;
 	}    
-    
 	if(LLAPRFile::isExist(logout_marker_file, LL_APR_RB))
 	{
-		LL_INFOS("MarkerFile") << "Last exec LLError crashed, setting LastExecEvent to " << LAST_EXEC_LLERROR_CRASH << LL_ENDL;
 		gLastExecEvent = LAST_EXEC_LOGOUT_FROZE;
+		LL_INFOS("MarkerFile") << "Last exec LLError crashed, setting LastExecEvent to " << gLastExecEvent << LL_ENDL;
+		LLAPRFile::remove(logout_marker_file);
 	}
 	if(LLAPRFile::isExist(llerror_marker_file, LL_APR_RB))
 	{
-		llinfos << "Last exec LLError crashed, setting LastExecEvent to " << LAST_EXEC_LLERROR_CRASH << llendl;
 		if(gLastExecEvent == LAST_EXEC_LOGOUT_FROZE) gLastExecEvent = LAST_EXEC_LOGOUT_CRASH;
 		else gLastExecEvent = LAST_EXEC_LLERROR_CRASH;
+		LL_INFOS("MarkerFile") << "Last exec LLError crashed, setting LastExecEvent to " << gLastExecEvent << LL_ENDL;
+		LLAPRFile::remove(llerror_marker_file);
 	}
 	if(LLAPRFile::isExist(error_marker_file, LL_APR_RB))
 	{
-		LL_INFOS("MarkerFile") << "Last exec crashed, setting LastExecEvent to " << LAST_EXEC_OTHER_CRASH << LL_ENDL;
 		if(gLastExecEvent == LAST_EXEC_LOGOUT_FROZE) gLastExecEvent = LAST_EXEC_LOGOUT_CRASH;
 		else gLastExecEvent = LAST_EXEC_OTHER_CRASH;
+		LL_INFOS("MarkerFile") << "Last exec crashed, setting LastExecEvent to " << gLastExecEvent << LL_ENDL;
+		LLAPRFile::remove(error_marker_file);
 	}
-	
-	LLAPRFile::remove(logout_marker_file);
-	LLAPRFile::remove(llerror_marker_file);
-	LLAPRFile::remove(error_marker_file);
 	
 	// No new markers if another instance is running.
 	if(anotherInstanceRunning()) 
@@ -2762,7 +2795,9 @@ void LLAppViewer::forceQuit()
 
 	LL_INFOS("forceQuit") << "Destroying the entire world" << LL_ENDL;
 	if (mQuitRequested)
-	LLApp::setQuitting(); 
+	{
+		LLApp::setQuitting();
+	}
 	else
 	{
 		if (mLogoutRequested) //we just finished a logout request
@@ -2925,7 +2960,7 @@ bool LLAppViewer::initCache()
 	// Purge cache if it belongs to an old version
 	else
 	{
-		static const S32 cache_version = 6;
+		static const S32 cache_version = 7;
 		if (gSavedSettings.getS32("LocalCacheVersion") != cache_version)
 		{
 			mPurgeCache = true;
@@ -3247,12 +3282,15 @@ void LLAppViewer::saveFinalSnapshot()
 		gSavedSettings.setBOOL("ShowParcelOwners", FALSE);
 		idle();
 
-		std::string snap_filename = gDirUtilp->getLindenUserDir();
-		snap_filename += gDirUtilp->getDirDelimiter();
-		snap_filename += SCREEN_LAST_FILENAME;
-		// use full pixel dimensions of viewer window (not post-scale dimensions)
-		gViewerWindow->saveSnapshot(snap_filename, gViewerWindow->getWindowDisplayWidth(), gViewerWindow->getWindowDisplayHeight(), FALSE, TRUE);
-		mSavedFinalSnapshot = TRUE;
+		std::string snap_filename = gDirUtilp->getLindenUserDir(true);
+		if (!snap_filename.empty())
+		{
+			snap_filename += gDirUtilp->getDirDelimiter();
+			snap_filename += SCREEN_LAST_FILENAME;
+			// use full pixel dimensions of viewer window (not post-scale dimensions)
+			gViewerWindow->saveSnapshot(snap_filename, gViewerWindow->getWindowDisplayWidth(), gViewerWindow->getWindowDisplayHeight(), FALSE, TRUE);
+			mSavedFinalSnapshot = TRUE;
+		}
 	}
 }
 
@@ -3671,6 +3709,9 @@ void LLAppViewer::idle()
 		gAgent.updateCamera();
 	}
 
+	// update media focus
+	LLViewerMediaFocus::getInstance()->update();
+
 	// objects and camera should be in sync, do LOD calculations now
 	{
 		LLFastTimer t(LLFastTimer::FTM_LOD_UPDATE);
@@ -3719,7 +3760,6 @@ void LLAppViewer::idleShutdown()
 	else
 	{
 		mQuitRequested=true;
-//awfixme
 		forceQuit();
 	}
 
@@ -3729,6 +3769,13 @@ void LLAppViewer::idleShutdown()
 	{
 		// application is quitting
 		gFloaterView->closeAllChildren(true);
+	}
+	
+	// extra invitation to the Snapshot Floater 
+	// not to show on the loginscreen when relogging
+	if (gSnapshotFloaterView)
+	{
+		gSnapshotFloaterView->closeAllChildren(true);
 	}
 
 	// close IM interface
@@ -3746,13 +3793,7 @@ void LLAppViewer::idleShutdown()
 		return;
 	}
 
-	static bool saved_snapshot = false;
-	if (!saved_snapshot)
-	{
-		saved_snapshot = true;
-		saveFinalSnapshot();
-		return;
-	}
+
 
 	const F32 SHUTDOWN_UPLOAD_SAVE_TIME = 5.f;
 
@@ -4146,9 +4187,10 @@ void LLAppViewer::resumeMainloopTimeout(const std::string& state, F32 secs)
 	{
 		if(secs < 0.0f)
 		{
-			secs = gSavedSettings.getF32("MainloopTimeoutDefault");
+			static F32 *sMainloopTimeoutDefault = rebind_llcontrol<F32>("MainloopTimeoutDefault", &gSavedSettings, true);
+			secs = *sMainloopTimeoutDefault;
 		}
-		
+
 		mMainloopTimeout->setTimeout(secs);
 		mMainloopTimeout->start(state);
 	}
@@ -4173,7 +4215,8 @@ void LLAppViewer::pingMainloopTimeout(const std::string& state, F32 secs)
 	{
 		if(secs < 0.0f)
 		{
-			secs = gSavedSettings.getF32("MainloopTimeoutDefault");
+			static F32 *sMainloopTimeoutDefault = rebind_llcontrol<F32>("MainloopTimeoutDefault", &gSavedSettings, true);
+			secs = *sMainloopTimeoutDefault;
 		}
 
 		mMainloopTimeout->setTimeout(secs);
@@ -4203,7 +4246,7 @@ void LLAppViewer::handleLoginComplete()
 	}
 	writeDebugInfo();
 
-// [RLVa:KB] - Alternate: Snowglobe-1.0 | Checked: 2009-08-05 (RLVa-1.0.1e) | Modified: RLVa-1.0.1e
+// [RLVa:KB] - Alternate: Snowglobe-1.2.4 | Checked: 2009-08-05 (RLVa-1.0.1e) | Modified: RLVa-1.0.1e
 	// NOTE: this function isn't called in Imprudence so any changes need to go in idle_startup() instead
 	gRlvHandler.initLookupTables();
 
