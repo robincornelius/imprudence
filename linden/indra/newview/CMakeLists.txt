@@ -1367,7 +1367,7 @@ if (WINDOWS)
         DEPENDS ${VIEWER_BINARY_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
         )
 
-    add_dependencies(${VIEWER_BINARY_NAME} SLPlugin media_plugin_quicktime media_plugin_webkit media_plugin_vlc) # Removed media_plugin_gstreamer010
+    add_dependencies(${VIEWER_BINARY_NAME} SLPlugin SLPluginBSD media_plugin_quicktime media_plugin_webkit media_plugin_vlc) # Removed media_plugin_gstreamer010
 
     if (PACKAGE)
       add_custom_target(package ALL DEPENDS ${CMAKE_CFG_INTDIR}/touched.bat)
@@ -1450,7 +1450,7 @@ if (LINUX)
       DEPENDS imprudence-stripped ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
       )
       
-  add_dependencies(${VIEWER_BINARY_NAME} SLPlugin media_plugin_gstreamer010 media_plugin_webkit)
+  add_dependencies(${VIEWER_BINARY_NAME} SLPlugin SLPluginBSD media_plugin_gstreamer010 media_plugin_webkit)
 
   if (NOT INSTALL)
     add_custom_target(package ALL DEPENDS ${product}.tar.bz2)
@@ -1489,7 +1489,7 @@ if (DARWIN)
     DEPENDS ${VIEWER_BINARY_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
     )
     
-  add_dependencies(${VIEWER_BINARY_NAME} SLPlugin media_plugin_quicktime media_plugin_webkit media_plugin_gstreamer010)
+  add_dependencies(${VIEWER_BINARY_NAME} SLPlugin SLPluginBSD media_plugin_quicktime media_plugin_webkit media_plugin_gstreamer010)
 
   if (PACKAGE)
       add_custom_target(package ALL DEPENDS ${VIEWER_BINARY_NAME}) 
@@ -1516,7 +1516,7 @@ if (DARWIN)
           ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
       )
 
-      add_dependencies(${VIEWER_BINARY_NAME} SLPlugin media_plugin_quicktime media_plugin_webkit media_plugin_gstreamer010)
+      add_dependencies(${VIEWER_BINARY_NAME} SLPlugin SLPLuginBSD media_plugin_quicktime media_plugin_webkit media_plugin_gstreamer010)
       add_custom_command(
         TARGET package POST_BUILD
         COMMAND ${PYTHON_EXECUTABLE}
@@ -1569,6 +1569,18 @@ if (WINDOWS)
         ${BUILT_SLPLUGIN}
         ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}
       COMMENT "Copying SLPlugin executable to the runtime folder."
+      )
+      
+  get_target_property(BUILT_SLPLUGINBSD SLPluginBSD LOCATION)
+  add_custom_command(
+      TARGET ${VIEWER_BINARY_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND}
+      ARGS
+        -E
+        copy_if_different
+        ${BUILT_SLPLUGINBSD}
+        ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}
+      COMMENT "Copying SLPluginBSD executable to the runtime folder."
       )
 
   get_target_property(BUILT_WEBKIT_PLUGIN media_plugin_webkit LOCATION)

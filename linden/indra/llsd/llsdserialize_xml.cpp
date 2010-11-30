@@ -33,6 +33,7 @@
 #include <sstream>
 #include <stdlib.h>	// for strtol and strtod
 
+#define XML_STATIC
 extern "C"
 {
 #include <expat/expat.h>

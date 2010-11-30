@@ -2,11 +2,8 @@
 
 project(llsd)
 
-include(00-Common)
-include(LLCommon)
-include(LLMath)
-include(LLMessage)
-include(LLXML)
+include (00-Common)
+include (EXPAT)
 
 include_directories(
   ${EXPAT_INCLUDE_DIRS}
@@ -20,6 +17,8 @@ set(llsd_SOURCE_FILES
 	llsdserialize_json.cpp
 	llsdserialize_notation.cpp
 	llsdserialize_xml.cpp
+    stub.cpp
+    base64.cpp
     )
     
 set(llsd_HEADER_FILES
@@ -31,6 +30,7 @@ set(llsd_HEADER_FILES
 	preprocessor.h
 	stdtypes.h
 	stub.h
+    base64.h
     )
 
 set_source_files_properties(${llsd_HEADER_FILES}
