@@ -1,10 +1,5 @@
 
-
-#include "windows.h"
-#include <string>
-#include <iostream>
-
-using namespace std;
+#include "rccommon.h"
 
 #include "llplugininstance.h"
 
@@ -83,7 +78,7 @@ void LLPluginInstance::receiveMessage(const char *message_string)
 {
 	if(mOwner)
 	{
-		cout << "Incomming message from plugin "<<message_string<<"\n";
+		//cout << "Incomming message from plugin "<<message_string<<"\n";
 		mOwner->receivePluginMessage(message_string);
 	}
 	else

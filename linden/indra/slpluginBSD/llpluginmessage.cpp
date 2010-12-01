@@ -26,13 +26,7 @@
  * @endcond
  */
 
-#define LL_WINDOWS 1
-
-//#include "linden_common.h"
-#include <set>
-#include <string>
-#include <sstream>
-#include "stdtypes.h"
+#include "rccommon.h"
 
 #include "llpluginmessage.h"
 #include "llsdserialize.h"

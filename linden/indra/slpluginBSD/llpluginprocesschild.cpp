@@ -26,29 +26,7 @@
  * @endcond
  */
 
-//#include "linden_common.h"
-
-#define LL_INFOS(x) std::cout << "WARN " << x << " : "
-#define LL_WARNS(x) std::cout << "WARN " << x << " : "
-#define LL_DEBUGS(x) std::cout << "DEBUG " << x << " : "
-#define LL_ERRS(x) std::cout << "DEBUG " << x << " : " 
-
-#define LL_ENDL "\n";
-
-
-#include "windows.h"
-
-#include <iostream>
-#include <queue>
-#include <stdio.h>
-#include <fcntl.h>
-#include <io.h>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <set>
-
-#include "lltimer.h"
+#include "rccommon.h"
 
 #include "llpluginprocesschild.h"
 #include "llplugininstance.h"
@@ -87,6 +65,7 @@ LLPluginProcessChild::~LLPluginProcessChild()
 
 void LLPluginProcessChild::killSockets(void)
 {
+	LL_WARNS("PLUGIN") << "KILL SOCKETS"<<LL_ENDL;
 	killMessagePipe();
 	//FIXME mSocket.reset();
 }
@@ -100,6 +79,7 @@ void LLPluginProcessChild::init(U32 launcher_port)
 
 void LLPluginProcessChild::idle(void)
 {
+	//std::cout << "idle\n";
 	bool idle_again;
 	do
 	{
@@ -158,12 +138,16 @@ void LLPluginProcessChild::idle(void)
 			
 			case STATE_CONNECTED:
 				sendMessageToParent(LLPluginMessage(LLPLUGIN_MESSAGE_CLASS_INTERNAL, "hello"));
+				std::cout<<"Sending hello and setting state to plugin load\n";
 				setState(STATE_PLUGIN_LOADING);
+				std::cout <<" Sent \n";
 			break;
 						
 			case STATE_PLUGIN_LOADING:
+				std::cout <<" State plugin loading \n";
 				if(!mPluginFile.empty())
 				{
+					std::cout << "STATE_PLUGIN_LOADING << mplugin is not empty\n";
 					mInstance = new LLPluginInstance(this);
 					if(mInstance->load(mPluginFile) == 0)
 					{
@@ -174,6 +158,7 @@ void LLPluginProcessChild::idle(void)
 					}
 					else
 					{
+						std::cout << "STATE_PLUGIN_LOADING << mplugin is empty\n";
 						setState(STATE_ERROR);
 					}
 				}
@@ -238,6 +223,9 @@ void LLPluginProcessChild::idle(void)
 			break;
 
 			case STATE_ERROR:
+
+				LL_ERRS("IDLE") << "ARRRG WE ARE ERRORED OUT of state machine" << LL_ENDL;
+
 				// Close the socket to the launcher
 				killSockets();				
 				// TODO: Where do we go from here?  Just exit()?
@@ -246,6 +234,7 @@ void LLPluginProcessChild::idle(void)
 			
 			case STATE_DONE:
 				// just sit here.
+				std::cout <<" STATE DONE????\n";
 			break;
 		}
 	
@@ -261,7 +250,7 @@ void LLPluginProcessChild::sleep(F64 seconds)
 	}
 	else
 	{
-		//FIXMEms_sleep((int)(seconds * 1000.0f));
+		ms_sleep((int)(seconds * 1000.0f));
 	}
 }
 
@@ -328,7 +317,7 @@ void LLPluginProcessChild::sendMessageToParent(const LLPluginMessage &message)
 {
 	std::string buffer = message.generate();
 
-	LL_DEBUGS("Plugin") << "Sending to parent: " << buffer << LL_ENDL;
+	//LL_DEBUGS("Plugin") << "Sending to parent: " << buffer << LL_ENDL;
 
 	writeMessageRaw(buffer);
 }
@@ -337,7 +326,7 @@ void LLPluginProcessChild::receiveMessageRaw(const std::string &message)
 {
 	// Incoming message from the TCP Socket
 
-	LL_DEBUGS("Plugin") << "Received from parent: " << message << LL_ENDL;
+	//LL_DEBUGS("Plugin") << "Received from parent: " << message << LL_ENDL;
 
 	// Decode this message
 	LLPluginMessage parsed;
@@ -379,7 +368,9 @@ void LLPluginProcessChild::receiveMessageRaw(const std::string &message)
 			{
 				std::string name = parsed.getValue("name");
 				size_t size = (size_t)parsed.getValueS32("size");
-				
+			
+				LL_WARNS("Plugin") << "shm_add " <<name<<" "<<size<< LL_ENDL;
+
 				sharedMemoryRegionsType::iterator iter = mSharedMemoryRegions.find(name);
 				if(iter != mSharedMemoryRegions.end())
 				{
@@ -404,6 +395,9 @@ void LLPluginProcessChild::receiveMessageRaw(const std::string &message)
 						message.setValuePointer("address", region->getMappedAddress());
 						sendMessageToPlugin(message);
 						
+
+						LL_WARNS("Plugin") << "sending shm_add_response " <<name<<" "<<size<<" "<< region->getMappedAddress()<< LL_ENDL;
+
 						// and send the response to the parent
 						message.setMessage(LLPLUGIN_MESSAGE_CLASS_INTERNAL, "shm_add_response");
 						message.setValue("name", name);
@@ -421,6 +415,9 @@ void LLPluginProcessChild::receiveMessageRaw(const std::string &message)
 			{
 				std::string name = parsed.getValue("name");
 				sharedMemoryRegionsType::iterator iter = mSharedMemoryRegions.find(name);
+
+				LL_WARNS("Plugin") << "shm_remove " <<name<< LL_ENDL;
+
 				if(iter != mSharedMemoryRegions.end())
 				{
 					// forward the remove request to the plugin -- its response will trigger us to detach the segment.
@@ -460,18 +457,18 @@ void LLPluginProcessChild::receiveMessageRaw(const std::string &message)
 	
 	if(passMessage && mInstance != NULL)
 	{
-		//FIXME LLTimer elapsed;
+		LLTimer elapsed;
 
-		//FIXME mInstance->sendMessage(message);
+		mInstance->sendMessage(message);
 
-		//FIXME mCPUElapsed += elapsed.getElapsedTimeF64();
+		mCPUElapsed += elapsed.getElapsedTimeF64();
 	}
 }
 
 /* virtual */ 
 void LLPluginProcessChild::receivePluginMessage(const std::string &message)
 {
-	LL_DEBUGS("Plugin") << "Received from plugin: " << message << LL_ENDL;
+	//LL_DEBUGS("Plugin") << "Received from plugin: " << message << LL_ENDL;
 	
 	if(mBlockingRequest)
 	{
@@ -550,7 +547,7 @@ void LLPluginProcessChild::receivePluginMessage(const std::string &message)
 	
 	if(passMessage)
 	{
-		LL_DEBUGS("Plugin") << "Passing through to parent: " << message << LL_ENDL;
+		//LL_DEBUGS("Plugin") << "Passing through to parent: " << message << LL_ENDL;
 		writeMessageRaw(message);
 	}
 	
@@ -559,7 +556,8 @@ void LLPluginProcessChild::receivePluginMessage(const std::string &message)
 		// The plugin wants to block and wait for a response to this message.
 		sleep(mSleepTime);	// this will pump the message pipe and process messages
 
-		//FIXME if(mBlockingResponseReceived || mSocketError != APR_SUCCESS || (mMessagePipe == NULL))
+		//if(mBlockingResponseReceived || mSocketError != APR_SUCCESS || (mMessagePipe == NULL))
+		if(mBlockingResponseReceived || (mMessagePipe == NULL))
 		{
 			// Response has been received, or we've hit an error state.  Stop waiting.
 			mBlockingRequest = false;

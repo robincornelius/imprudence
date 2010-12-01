@@ -26,10 +26,8 @@
  * @endcond
  */
 
-#include <string>
-#include <sstream>
+#include "rccommon.h"
 
-using namespace std;
 
 #include "llpluginsharedmemory.h"
 
@@ -404,11 +402,11 @@ bool LLPluginSharedMemory::map(void)
 		
 	if(mMappedAddress == NULL)
 	{
-		//LL_WARNS("Plugin") << "MapViewOfFile failed: " << GetLastError() << LL_ENDL;
+		LL_WARNS("Plugin") << "MapViewOfFile failed: " << GetLastError() << LL_ENDL;
 		return false;
 	}
 	
-	//LL_DEBUGS("Plugin") << "memory mapped at " << mMappedAddress << LL_ENDL;
+	LL_DEBUGS("Plugin") << "memory mapped at " << mMappedAddress << LL_ENDL;
 
 	return true;
 }
@@ -458,7 +456,7 @@ bool LLPluginSharedMemory::create(size_t size)
 
 	if(mImpl->mMapFile == NULL)
 	{
-		//LL_WARNS("Plugin") << "CreateFileMapping failed: " << GetLastError() << LL_ENDL;
+		LL_WARNS("Plugin") << "CreateFileMapping failed: " << GetLastError() << LL_ENDL;
 		return false;
 	}
 
@@ -486,7 +484,7 @@ bool LLPluginSharedMemory::attach(const std::string &name, size_t size)
 	
 	if(mImpl->mMapFile == NULL)
 	{
-		//LL_WARNS("Plugin") << "OpenFileMapping failed: " << GetLastError() << LL_ENDL;
+		LL_WARNS("Plugin") << "OpenFileMapping failed: " << GetLastError() << LL_ENDL;
 		return false;
 	}
 		

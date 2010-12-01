@@ -108,6 +108,7 @@ void LLPluginMessagePipeOwner::killMessagePipe(void)
 {
 	if(mMessagePipe != NULL)
 	{
+		LL_WARNS("Plugin") << "KILL MESSAGE PIPE " <<  LL_ENDL;
 		delete mMessagePipe;
 		mMessagePipe = NULL;
 	}
@@ -172,8 +173,7 @@ void LLPluginMessagePipe::setSocketTimeout(int timeout_usec)
 
 bool LLPluginMessagePipe::pump(F64 timeout)
 {
-//	LL_INFOS("LLPluginMessagePipe")<<"PUMP"<< LL_ENDL;
-
+	//LL_INFOS("LLPluginMessagePipe")<<"PUMP"<< LL_ENDL;
 
 	bool result = pumpOutput();
 	
@@ -197,8 +197,14 @@ bool LLPluginMessagePipe::pumpOutput()
 			
 		if(!mOutput.empty())
 		{
-			std::cout<<"sending "<<mOutput<<"\n";
+			//std::cout<<"sending "<<mOutput<<"\n";
 			int len_sent = send(mSocket,mOutput.data(),mOutput.size(),0);
+
+			if(WSAGetLastError()!=0 && WSAGetLastError()!=WSAEWOULDBLOCK)
+			{
+				LL_INFOS("WSA ERROR")<<"PUMP Output "<< WSAGetLastError()<<LL_ENDL
+			}
+
 			if(len_sent!=mOutput.size())
 			{
 				result=false;
@@ -219,7 +225,6 @@ bool LLPluginMessagePipe::pumpInput(F64 timeout)
 
 	//LL_INFOS("LLPluginMessagePipe")<<"Pump inpput"<< LL_ENDL;
 
-
 	if(timeout != 0.0f)
 	{
 		Sleep((int)(timeout * 1000.0f));
@@ -231,10 +236,15 @@ bool LLPluginMessagePipe::pumpInput(F64 timeout)
 	memset(buf,0,4096);
 
 	int len = recv(mSocket,buf,1024,0); 
+
+	if(WSAGetLastError()!=0 && WSAGetLastError()!=WSAEWOULDBLOCK)
+	{
+		LL_INFOS("WSA ERROR")<<"PUMP input "<< WSAGetLastError()<<LL_ENDL
+	}
 	
 	if(len>0)
 	{
-		std::cout<<"recv "<<buf<<"\n";
+		//std::cout<<"recv "<<buf<<"\n";
 		//RCMutexLock(mInputMutex);
 		mInput.append(buf, len);
 	}
@@ -251,6 +261,7 @@ void LLPluginMessagePipe::processInput(void)
 	//mInputMutex.Lock();
 	while((delim = mInput.find(MESSAGE_DELIMITER)) != std::string::npos)
 	{	
+		//std::cout<< "processInput\n";
 		// Let the owner process this message
 		if (mOwner)
 		{
@@ -259,9 +270,9 @@ void LLPluginMessagePipe::processInput(void)
 			// and this guarantees that the messages will get dequeued correctly.
 			std::string message(mInput, 0, delim);
 			mInput.erase(0, delim + 1);
-			mInputMutex.UnLock();
+			//mInputMutex.UnLock();
 			mOwner->receiveMessageRaw(message);
-			mInputMutex.Lock();
+			//mInputMutex.Lock();
 		}
 		else
 		{

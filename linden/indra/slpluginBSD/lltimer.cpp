@@ -24,30 +24,10 @@
  * $/LicenseInfo$
  */
 
-//#include "linden_common.h"
-#define LL_INFOS(x) std::cout << "WARN " << x << " : "
-#define LL_WARNS(x) std::cout << "WARN " << x << " : "
-#define LL_DEBUGS(x) std::cout << "DEBUG " << x << " : "
-#define LL_ERRS(x) std::cout << "DEBUG " << x << " : " 
 
-#define LL_ENDL "\n";
-
-#define LL_COMMON_API /**/
-#define _CRT_SECURE_NO_WARNINGS
-
-#include <iostream>
-#include <queue>
-#include <stdio.h>
-#include <fcntl.h>
-#include <io.h>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <set>
-#include "time.h"
+#include "rccommon.h"
 
 #include "lltimer.h"
-
 
 F64 U64_to_F64(const U64 value)
 {
@@ -62,8 +42,6 @@ F64 U64_to_F64(const U64 value)
 
 #if LL_WINDOWS
 #	define WIN32_LEAN_AND_MEAN
-#	include <winsock2.h>
-#	include <windows.h>
 #elif LL_LINUX || LL_SOLARIS || LL_DARWIN
 #       include <errno.h>
 #	include <sys/time.h>
