@@ -275,6 +275,7 @@ set(viewer_SOURCE_FILES
     llmaniprotate.cpp
     llmanipscale.cpp
     llmaniptranslate.cpp
+	llmediadataclient.cpp
     llmapresponders.cpp
     llmediaremotectrl.cpp
     llmemoryview.cpp
@@ -509,6 +510,7 @@ set(viewer_SOURCE_FILES
     wlfloaterwindlightsend.cpp
     wlretrievesettings.cpp
     wlsettingsmanager.cpp
+    rcmoapradar.cpp
     )
 
 set(VIEWER_BINARY_NAME "imprudence-bin" CACHE STRING
@@ -738,6 +740,7 @@ set(viewer_HEADER_FILES
     llmaniprotate.h
     llmanipscale.h
     llmaniptranslate.h
+	llmediadataclient.h
     llmapresponders.h
     llmediaremotectrl.h
     llmemoryview.h
@@ -982,6 +985,7 @@ set(viewer_HEADER_FILES
     wlfloaterwindlightsend.h
     wlretrievesettings.h
     wlsettingsmanager.h
+	rcmoapradar.h
     )
 
 source_group("CMake Rules" FILES ViewerInstall.cmake)
